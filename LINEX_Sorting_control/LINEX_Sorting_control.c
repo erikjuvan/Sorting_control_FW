@@ -62,11 +62,19 @@ struct {
 uint32_t capsule_track_cnt[N_CHANNELS] = { 0 };
 uint32_t capsule_cnt = 0;
 
+uint8_t pinToggleTimer = 0;
+
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void) {
 	HAL_IncTick();
 	HAL_SYSTICK_IRQHandler();
+		
+	if (pinToggleTimer > 0) {
+		pinToggleTimer--;
+	} else {
+		GPIOE->BSRR = GPIO_PIN_7 << 16;
+	}
 }
 
 void OTG_FS_IRQHandler(void)
@@ -94,7 +102,7 @@ void TIM3_IRQHandler() {
 // IRQ Callbacks
 /////////////////////////////////////
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim->Instance == TIM2) {			// low speed (page)			
+	if (htim->Instance == TIM2) {			// low speed (page)					
 	}
 	else if (htim->Instance == TIM3) {	// high speed (line)
 		HAL_ADC_Start(&g_AdcHandle);
@@ -217,8 +225,8 @@ void TIM2_Configure() {
 	
 	TIM2_Handle.Instance = TIM2;
 	TIM2_Handle.Init.Prescaler = (uint32_t)((SystemCoreClock / 2) / 1e5) - 1;	// 100 kHz frequency
-	TIM2_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;
-	TIM2_Handle.Init.Period = 1e5 - 1;	// count to 1e5 gives 1 s interrupt
+	TIM2_Handle.Init.CounterMode = TIM_COUNTERMODE_UP;	
+	TIM2_Handle.Init.Period = 1e3 - 1;	// count to 1e3 gives 10 ms interrupt
 	TIM2_Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
 	TIM2_Handle.Init.RepetitionCounter = 0;
 	
@@ -247,8 +255,6 @@ void TIM3_Configure() {
 	HAL_TIM_Base_Start_IT(&TIM3_Handle);
 }
 
-
-
 void GPIO_Configure() {
 	GPIO_InitTypeDef	GPIO_InitStructure;
 	
@@ -263,6 +269,11 @@ void GPIO_Configure() {
 	
 	GPIO_InitStructure.Pin = DEBUG_PIN1;
 	HAL_GPIO_Init(DEBUG_PORT1, &GPIO_InitStructure);	
+	
+	// Product present GPIO: PE7 (O0)
+	__GPIOE_CLK_ENABLE();
+	GPIO_InitStructure.Pin = GPIO_PIN_7;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStructure);
 	
 	// Prozenje za ADC-je za timing test 
 	/*
@@ -475,11 +486,14 @@ __attribute__((optimize("O2"))) void Filter(uint16_t* x) {
 			capsule_track_cnt[i]++;
 			capsule_cnt++;
 			blind_time[i] = BLIND_TIME;
-			//VCP_write(&capsule_cnt, sizeof(capsule_cnt));			
+			//VCP_write(&capsule_cnt, sizeof(capsule_cnt));
+			GPIOE->BSRR = GPIO_PIN_7;
+			pinToggleTimer = 9;
 		}
 	}
 	
 	AddValue(y4, N_CHANNELS);
+
 	//ResetCC();
 	//foo();
 	//volatile int cycles = GetCC();		
