@@ -40,18 +40,20 @@ TIM_HandleTypeDef	TIM2_Handle, TIM3_Handle;
 ADC_HandleTypeDef	g_AdcHandle;
 DMA_HandleTypeDef	g_DmaHandle;
 
-#define PC 0
-#define STOPWATCH
+//#define STOPWATCH
 
-#if PC == 1
-#define		ADC_BUFFER_SIZE		64
-#else
-#define		ADC_BUFFER_SIZE		2
-#endif
+#define		FILTERED_BUFFER_SIZE 2
+#define		RAW_BUFFER_SIZE	64
 
 #define		N_CHANNELS		3
-uint16_t	g_ADCBuffer[ADC_BUFFER_SIZE][N_CHANNELS] = { 0 };
-uint16_t	startFrame = 0xFFFF;
+uint32_t	rawBuffer[RAW_BUFFER_SIZE][N_CHANNELS] = { 0 };
+uint32_t	filteredBuffer[FILTERED_BUFFER_SIZE][N_CHANNELS] = { 0 };
+int			filtered = 1;
+
+float A1 = 0.01;
+float A2 = 0.03;
+float A4 = 0.03;
+float FTR_THRSHLD = 7.0;
 
 enum { IDLE = 0, HALF_CPLT, CPLT } adcState = IDLE;
 
@@ -152,8 +154,8 @@ void DMA_Configure() {
 	g_DmaHandle.Init.Direction = DMA_PERIPH_TO_MEMORY;
 	g_DmaHandle.Init.PeriphInc = DMA_PINC_DISABLE;
 	g_DmaHandle.Init.MemInc = DMA_MINC_ENABLE;
-	g_DmaHandle.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-	g_DmaHandle.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+	g_DmaHandle.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+	g_DmaHandle.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
 	g_DmaHandle.Init.Mode = DMA_CIRCULAR;
 	g_DmaHandle.Init.Priority = DMA_PRIORITY_HIGH;
 	g_DmaHandle.Init.FIFOMode = DMA_FIFOMODE_DISABLE;         
@@ -346,8 +348,33 @@ int ParseCMD(uint8_t *buf, int len) {
 		else {
 			return 1;
 		}
-	} else if (strncmp((char *)pt, "CRST", strlen((char*)pt)) == 0) {
+	} 
+	
+	else if (strncmp((char *)pt, "CRST", strlen((char*)pt)) == 0) {
 		ResetValues();
+	} 
+	
+	else if (strncmp((char *)pt, "CRAW", strlen((char*)pt)) == 0) {
+		filtered = 0;
+		HAL_ADC_Stop_DMA(&g_AdcHandle);
+		HAL_ADC_Start_DMA(&g_AdcHandle, (uint32_t*)(&rawBuffer[0][0]), RAW_BUFFER_SIZE * N_CHANNELS);		
+	} 
+	
+	else if (strncmp((char *)pt, "CFILTR", strlen((char*)pt)) == 0) {
+		filtered = 1;
+		HAL_ADC_Stop_DMA(&g_AdcHandle);
+		HAL_ADC_Start_DMA(&g_AdcHandle, (uint32_t*)(&filteredBuffer[0][0]), FILTERED_BUFFER_SIZE * N_CHANNELS);	
+	} 
+	
+	else if (strncmp((char *)pt, "CPARAMS", strlen((char*)pt)) == 0) {
+		pt = (uint8_t *)strtok(NULL, ",");
+		A1 = atof((char*)pt);		
+		pt = (uint8_t *)strtok(NULL, ",");
+		A2 = atof((char*)pt);	
+		pt = (uint8_t *)strtok(NULL, ",");
+		A4 = atof((char*)pt);	
+		pt = (uint8_t *)strtok(NULL, ",");
+		FTR_THRSHLD = atof((char*)pt);
 	}
 	
 	return 1;
@@ -449,7 +476,7 @@ void AddValue(float f[N_CHANNELS], int n_elements) {
 	}	
 }
 
-__attribute__((optimize("O2"))) void Filter(uint16_t* x) {
+__attribute__((optimize("O2"))) void Filter(uint32_t* x) {
 	/*
 	1.stage: LPF
 	y[i] = a * x[i] + (1 - a) * y[i - 1]
@@ -460,11 +487,7 @@ __attribute__((optimize("O2"))) void Filter(uint16_t* x) {
 	y[i] = a * abs(x[i]) + (1 - a) * y[i - 1]
 	*/
 	const int BLIND_TIME = 1000;
-	static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
-	const float A1 = 0.01;
-	const float A2 = 0.03;
-	const float A4 = 0.03;
-	const float FTR_THRSHLD = 7.0;
+	static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];	
 	static int blind_time[N_CHANNELS] = { 0 };				
 	
 	for (int i = 0; i < N_CHANNELS; i++) {
@@ -530,10 +553,10 @@ static void Init() {
 int main() {				
 	Init();
 	//WaitForGo();
+	filtered = 1;
+	HAL_ADC_Start_DMA(&g_AdcHandle, (uint32_t*)(&filteredBuffer[0][0]), FILTERED_BUFFER_SIZE * N_CHANNELS);
 	
-	HAL_ADC_Start_DMA(&g_AdcHandle, (uint32_t*)(&g_ADCBuffer[0][0]), ADC_BUFFER_SIZE * N_CHANNELS);
-	
-	uint8_t rxBuf[20] = { 0 };
+	uint8_t rxBuf[50] = { 0 };
 	while (1) {
 		int read = VCP_read(rxBuf, sizeof(rxBuf));	
 		
@@ -544,18 +567,18 @@ int main() {
 		
 		if (adcState == HALF_CPLT) {
 			adcState = IDLE;
-#if PC == 1
-			VCP_write(&g_ADCBuffer[0][0], (ADC_BUFFER_SIZE * N_CHANNELS));
-#else
-			Filter(&g_ADCBuffer[0][0]);
-#endif
+			if (filtered) {
+				Filter(&filteredBuffer[0][0]);
+			} else {
+				VCP_write(&rawBuffer[0][0], sizeof(rawBuffer) / 2);
+			}			
 		} else if (adcState == CPLT) {
 			adcState = IDLE;
-#if PC == 1
-			VCP_write(&g_ADCBuffer[ADC_BUFFER_SIZE / 2][0], (ADC_BUFFER_SIZE * N_CHANNELS));
-#else
-			Filter(&g_ADCBuffer[ADC_BUFFER_SIZE / 2][0]);
-#endif
+			if (filtered) {
+				Filter(&filteredBuffer[FILTERED_BUFFER_SIZE/2][0]);
+			} else {
+				VCP_write(&rawBuffer[RAW_BUFFER_SIZE/2][0],  sizeof(rawBuffer) / 2);
+			}
 		}			
 	}
 }
