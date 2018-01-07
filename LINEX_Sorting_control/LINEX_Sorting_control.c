@@ -42,6 +42,7 @@ extern char g_VCPInitialized;
 #define	N_CHANNELS		8
 #define	BUFFER_SIZE		2
 
+#define	DEBUG_TIM
 //#define STOPWATCH
 
 void AddValues(void* x);
@@ -91,7 +92,18 @@ void OTG_FS_IRQHandler(void) {
 	HAL_PCD_IRQHandler(&hpcd);
 }
 
+#ifdef DEBUG_TIM
+void TIM2_IRQHandler() {
+	TIMx->SR &= ~(TIM_SR_TIF | TIM_SR_UIF);
+	GPIOC->BSRR = GPIO_PIN_11;
+}
+#endif
+
 void DMA2_Stream0_IRQHandler() {
+#ifdef DEBUG_TIM
+	GPIOC->BSRR = GPIO_PIN_11 << 16;
+#endif
+
 	if (DMA2->LISR & DMA_LISR_HTIF0) {			// If half-transfer complete
 		DMA2->LIFCR = DMA_LIFCR_CHTIF0;			// clear half transfer complete interrupt flag				
 		
@@ -262,7 +274,13 @@ void TIM_Configure() {
 	TIMx->CR2	= TIM_CR2_MMS_1;
 	TIMx->EGR	= TIM_EGR_UG;   	// Reset the counter and generate update event
 	TIMx->SR	= 0;	// Clear interrupts
+	TIMx->DIER	= TIM_DIER_TIE | TIM_DIER_UIE;
 	TIMx->CR1	= TIM_CR1_CEN;
+	
+#ifdef DEBUG_TIM
+	HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);   
+	HAL_NVIC_EnableIRQ(TIM2_IRQn);
+#endif
 }
 
 void GPIO_Configure() {
@@ -284,26 +302,6 @@ void GPIO_Configure() {
 	__GPIOE_CLK_ENABLE();
 	GPIO_InitStructure.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
 	HAL_GPIO_Init(GPIOE, &GPIO_InitStructure);
-}
-
-void OutputMCO() {
-	__GPIOA_CLK_ENABLE();
-	__GPIOC_CLK_ENABLE();
-	
-	GPIO_InitTypeDef	GPIO_InitStructure;
-	
-	GPIO_InitStructure.Pin = GPIO_PIN_8;
-	GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStructure.Pull = GPIO_NOPULL;
-	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_MEDIUM;
-	GPIO_InitStructure.Alternate = 0;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);	
-	
-	GPIO_InitStructure.Pin = GPIO_PIN_9;
-	HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
-
-	__HAL_RCC_MCO1_CONFIG(RCC_MCO1SOURCE_PLLCLK, RCC_MCODIV_5);
-	__HAL_RCC_MCO2_CONFIG(RCC_MCO2SOURCE_SYSCLK, RCC_MCODIV_5);
 }
 
 void ChangeSampleFrequency() {
