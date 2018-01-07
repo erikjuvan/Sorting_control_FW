@@ -326,6 +326,9 @@
     <ClCompile Include="C:\Users\erik.kiefer.juvan\AppData\Local\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32\STM32F4xxxx\STM32F4xx_HAL_Driver\Src\stm32f4xx_ll_utils.c">
       <Filter>Source files\Device-specific files\HAL</Filter>
     </ClCompile>
+    <ClCompile Include="misc.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="usbd_cdc_if.h">
