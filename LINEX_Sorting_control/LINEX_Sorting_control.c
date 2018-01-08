@@ -42,8 +42,8 @@ extern char g_VCPInitialized;
 #define	N_CHANNELS		8
 #define	BUFFER_SIZE		2
 
-#define	DEBUG_TIM
-//#define STOPWATCH
+//#define	DEBUG_TIM
+//#define	STOPWATCH
 
 void AddValues(void* x);
 void Filter(uint32_t* x);
@@ -353,22 +353,22 @@ int ParseCMD(uint8_t *buf, int len) {
 	} 
 	
 	else if (strncmp((char *)pt, "CPARAMS", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		A1 = atof((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		A2 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		A4 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		FTR_THRSHLD = atof((char*)pt);
 	}
 	
 	else if (strncmp((char *)pt, "CTIMES", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		T_delay = atoi((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		T_duration = atoi((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
+		pt = (uint8_t *)strtok(NULL, ";");
 		T_blind = atoi((char*)pt);	
 	}
 	
