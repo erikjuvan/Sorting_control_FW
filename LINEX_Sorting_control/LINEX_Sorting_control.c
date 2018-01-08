@@ -71,11 +71,8 @@ struct {
 	int timer_period;	// us
 } g_parameters = {.timer_period = 1000};
 
-uint32_t capsule_track_cnt[N_CHANNELS] = { 0 };
-uint32_t capsule_cnt = 0;
-
-uint32_t duration_timer[N_CHANNELS] = {0};
-uint32_t delay_timer[N_CHANNELS] = {0};
+int32_t duration_timer[N_CHANNELS] = {0};
+int32_t delay_timer[N_CHANNELS] = {0};
 uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
 
 int		filtered = 1;
@@ -123,17 +120,16 @@ void DMA2_Stream0_IRQHandler() {
 		}			
 	}
 	
-	for (int i = 0; i < N_CHANNELS; ++i) {
-		
-		if (delay_timer[i] > 0) {			
-			if (--delay_timer[i] == 0) {
+	for (int i = 0; i < N_CHANNELS; ++i) {		
+		if (delay_timer[i] >= 0) {			
+			if (delay_timer[i]-- == 0) {
 				GPIOE->BSRR = GPIO_Pins[i];
 				duration_timer[i] = T_duration;
 			}
 		}			
 		
-		if (duration_timer[i] > 0) {			
-			if (--duration_timer[i] == 0) {
+		if (duration_timer[i] >= 0) {			
+			if (duration_timer[i]-- == 0) {
 				GPIOE->BSRR = GPIO_Pins[i] << 16;
 			}
 		}
@@ -309,14 +305,6 @@ void ChangeSampleFrequency() {
 	TIMx->EGR = TIM_EGR_UG;		
 }
 
-void ResetValues() {
-	capsule_cnt = 0;
-	
-	for (int i = 0; i < N_CHANNELS; i++) {
-		capsule_track_cnt[i] = 0;
-	}
-}
-
 int ParseCMD(uint8_t *buf, int len) {
 	uint8_t *pt = NULL;
 	
@@ -337,38 +325,34 @@ int ParseCMD(uint8_t *buf, int len) {
 	} 
 	
 	else if (strncmp((char *)pt, "CRST", strlen((char*)pt)) == 0) {
-		ResetValues();
+		
 	} 
 	
 	else if (strncmp((char *)pt, "CRAW", strlen((char*)pt)) == 0) {
 		filtered = 0;
-		//HAL_ADC_Stop_DMA(&ADC1_Handle);
-		//HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&rawBuffer[0][0]), RAW_BUFFER_SIZE * N_CHANNELS);		
 	} 
 	
 	else if (strncmp((char *)pt, "CFILTR", strlen((char*)pt)) == 0) {
 		filtered = 1;
-		//HAL_ADC_Stop_DMA(&ADC1_Handle);
-		//HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&filteredBuffer[0][0]), FILTERED_BUFFER_SIZE * N_CHANNELS);	
 	} 
 	
 	else if (strncmp((char *)pt, "CPARAMS", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		A1 = atof((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		A2 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		A4 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		FTR_THRSHLD = atof((char*)pt);
 	}
 	
 	else if (strncmp((char *)pt, "CTIMES", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		T_delay = atoi((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		T_duration = atoi((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ";");
+		pt = (uint8_t *)strtok(NULL, ",");
 		T_blind = atoi((char*)pt);	
 	}
 	
@@ -412,8 +396,6 @@ __attribute__((optimize("O2"))) void Filter(uint32_t* x) {
 		blind_time[i] -=  (blind_time[i] > 0);
 		
 		if (y4[i] > FTR_THRSHLD && blind_time[i] <= 0) {
-			capsule_track_cnt[i]++;
-			capsule_cnt++;
 			blind_time[i] = T_blind;
 			delay_timer[i] = T_delay;			
 		}
@@ -449,7 +431,6 @@ static void Init() {
 
 int main() {				
 	Init();
-	//WaitForGo();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 	
 	uint8_t rxBuf[50] = { 0 };
