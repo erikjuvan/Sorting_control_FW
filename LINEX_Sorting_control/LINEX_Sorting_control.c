@@ -7,6 +7,8 @@
 #include <string.h>
 #include <math.h>
 
+#include "uart.h"
+
 USBD_HandleTypeDef USBD_Device;
 void SysTick_Handler(void);
 void OTG_FS_IRQHandler(void);
@@ -16,6 +18,8 @@ extern PCD_HandleTypeDef hpcd;
 int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size); 
 extern char g_VCPInitialized;
+
+extern __IO uint8_t UartRxComplete;
 
 #define GPIO_SET_BIT(PORT, BIT)		PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT)		PORT->BSRR = (BIT << 16)
@@ -421,7 +425,10 @@ static void Init() {
 	GPIO_Configure();
 	ADC_Configure();
 	DMA_Configure();
-	TIM_Configure();	
+	TIM_Configure();
+	
+	// UART
+	UART_init();
 	
 #ifdef STOPWATCH
 	EnableCC();	  
@@ -432,6 +439,11 @@ static void Init() {
 int main() {				
 	Init();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+	
+	#define BUF_422_SIZE	10
+	uint8_t rxBuf_422_rx[BUF_422_SIZE] = {0};
+	uint8_t rxBuf_422_tx[BUF_422_SIZE] = {0};
+	UART_read((uint8_t*)rxBuf_422_rx, BUF_422_SIZE);
 	
 	uint8_t rxBuf[50] = { 0 };
 	while (1) {
@@ -446,5 +458,14 @@ int main() {
 			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
 			writeToPC = 0;
 		}
+		
+		if (UartRxComplete) {
+			memcpy(rxBuf_422_tx, rxBuf_422_rx, BUF_422_SIZE);
+			UART_write(rxBuf_422_tx, BUF_422_SIZE);
+			UartRxComplete = 0;
+			UART_read((uint8_t*)rxBuf_422_rx, BUF_422_SIZE);
+		}
 	}
 }
+
+	

@@ -157,6 +157,7 @@
     <ClCompile Include="LINEX_Sorting_control.c" />
     <ClCompile Include="misc.c" />
     <ClCompile Include="system_stm32f4xx.c" />
+    <ClCompile Include="uart.c" />
     <ClCompile Include="usbd_cdc_if.c" />
     <ClCompile Include="usbd_conf.c" />
     <ClCompile Include="usbd_desc.c" />
@@ -280,6 +281,7 @@
     <ClInclude Include="C:\Users\erik.kiefer.juvan\AppData\Local\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32\STM32_USB_Device_Library\Core\Inc\usbd_def.h" />
     <ClInclude Include="C:\Users\erik.kiefer.juvan\AppData\Local\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32\STM32_USB_Device_Library\Core\Inc\usbd_ioreq.h" />
     <ClInclude Include="stm32f4xx_hal_conf.h" />
+    <ClInclude Include="uart.h" />
     <ClInclude Include="usbd_cdc_if.h" />
     <ClInclude Include="usbd_conf.h" />
     <ClInclude Include="usbd_desc.h" />
