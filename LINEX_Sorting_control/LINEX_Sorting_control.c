@@ -70,6 +70,8 @@ float FTR_THRSHLD = 7.0;
 uint32_t T_delay = 0;
 uint32_t T_duration = 100;
 uint32_t T_blind = 1000;
+int skip_2nd = 0;
+int skip_2nd_cntr[N_CHANNELS] = {0};
 
 struct {
 	int timer_period;	// us
@@ -101,6 +103,7 @@ void TIM2_IRQHandler() {
 #endif
 
 void DMA2_Stream0_IRQHandler() {
+	
 #ifdef DEBUG_TIM
 	GPIOC->BSRR = GPIO_PIN_11 << 16;
 #endif
@@ -226,42 +229,42 @@ void ADC_Configure() {
 	
 	adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;	// ADC_SAMPLETIME_84CYCLES
 	adcChannelConfig.Channel = ADC_CHANNEL_0;
-	adcChannelConfig.Rank = 1;	
+	adcChannelConfig.Rank = 5;	
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 	
 	adcChannelConfig.Channel = ADC_CHANNEL_1;
-	adcChannelConfig.Rank = 2;
+	adcChannelConfig.Rank = 6;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}	
 	
 	adcChannelConfig.Channel = ADC_CHANNEL_2;
-	adcChannelConfig.Rank = 3;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_3;
-	adcChannelConfig.Rank = 4;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_10;
-	adcChannelConfig.Rank = 5;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_11;
-	adcChannelConfig.Rank = 6;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_12;
 	adcChannelConfig.Rank = 7;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 	
-	adcChannelConfig.Channel = ADC_CHANNEL_13;
+	adcChannelConfig.Channel = ADC_CHANNEL_3;
 	adcChannelConfig.Rank = 8;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_10;
+	adcChannelConfig.Rank = 1;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_11;
+	adcChannelConfig.Rank = 2;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_12;
+	adcChannelConfig.Rank = 3;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_13;
+	adcChannelConfig.Rank = 4;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 }
@@ -288,6 +291,7 @@ void GPIO_Configure() {
 	
 	DEBUG_CLK();
 	DEBUG_CLK1();
+	__GPIOD_CLK_ENABLE();
 	
 	GPIO_InitStructure.Pin = DEBUG_PIN;
 	GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
@@ -360,6 +364,17 @@ int ParseCMD(uint8_t *buf, int len) {
 		T_blind = atoi((char*)pt);	
 	}
 	
+	else if (strncmp((char *)pt, "CSKIPSCND", strlen((char*)pt)) == 0) {
+		pt = (uint8_t *)strtok(NULL, ",");
+		if (atoi((char*)pt) == 1) {
+			skip_2nd = 1;
+			for (int i = 0; i < N_CHANNELS; ++i)
+				skip_2nd_cntr[i] = 0;
+		} else {
+			skip_2nd = 0;
+		}
+	}
+	
 	return 1;
 }
 
@@ -401,7 +416,12 @@ __attribute__((optimize("O2"))) void Filter(uint32_t* x) {
 		
 		if (y4[i] > FTR_THRSHLD && blind_time[i] <= 0) {
 			blind_time[i] = T_blind;
-			delay_timer[i] = T_delay;			
+			if (skip_2nd) {				
+				if (++skip_2nd_cntr[i] % 2)
+					delay_timer[i] = T_delay;
+			} else {
+				delay_timer[i] = T_delay;
+			}
 		}
 	}
 	
