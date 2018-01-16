@@ -84,6 +84,9 @@ uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_1
 int		filtered = 1;
 uint8_t writeToPC = 0;
 
+uint16_t trigger_output = 0;
+uint16_t detected_objects = 0;
+
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void) {
@@ -102,7 +105,7 @@ void TIM2_IRQHandler() {
 }
 #endif
 
-void DMA2_Stream0_IRQHandler() {
+__attribute__((optimize("O2"))) void DMA2_Stream0_IRQHandler() {
 	
 #ifdef DEBUG_TIM
 	GPIOC->BSRR = GPIO_PIN_11 << 16;
@@ -137,7 +140,7 @@ void DMA2_Stream0_IRQHandler() {
 		
 		if (duration_timer[i] >= 0) {			
 			if (duration_timer[i]-- == 0) {
-				GPIOE->BSRR = GPIO_Pins[i] << 16;
+				GPIOE->BSRR = GPIO_Pins[i] << 16;				
 			}
 		}
 	}		
@@ -378,7 +381,7 @@ int ParseCMD(uint8_t *buf, int len) {
 	return 1;
 }
 
-void AddValues(void* x) {	
+__attribute__((optimize("O2"))) void AddValues(void* x) {	
 	memcpy(&SendBuffer[SendBuffer_i], x, N_CHANNELS * sizeof(float));
 	SendBuffer_i += N_CHANNELS;
 
@@ -386,6 +389,20 @@ void AddValues(void* x) {
 		writeToPC = 1;
 		SendBuffer_i = 0;
 	}
+}
+
+__attribute__((optimize("O2"))) void ObjectDetected(int idx) {
+	int set = 1;
+	if (skip_2nd) {				
+		if (skip_2nd_cntr[idx]++ % 2)
+			set = 0;
+	}
+	
+	if (set && ((1 << idx) & trigger_output)) {
+		delay_timer[idx] = T_delay;
+	}
+	
+	detected_objects |= 1 << idx;
 }
 
 __attribute__((optimize("O2"))) void Filter(uint32_t* x) {
@@ -416,12 +433,7 @@ __attribute__((optimize("O2"))) void Filter(uint32_t* x) {
 		
 		if (y4[i] > FTR_THRSHLD && blind_time[i] <= 0) {
 			blind_time[i] = T_blind;
-			if (skip_2nd) {				
-				if (++skip_2nd_cntr[i] % 2)
-					delay_timer[i] = T_delay;
-			} else {
-				delay_timer[i] = T_delay;
-			}
+			ObjectDetected(i);
 		}
 	}
 	
@@ -456,14 +468,14 @@ static void Init() {
 
 }
 
-int main() {				
+__attribute__((optimize("O2"))) int main() {				
 	Init();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 	
 	#define BUF_422_SIZE	10
-	uint8_t rxBuf_422_rx[BUF_422_SIZE] = {0};
-	uint8_t rxBuf_422_tx[BUF_422_SIZE] = {0};
-	UART_read((uint8_t*)rxBuf_422_rx, BUF_422_SIZE);
+	uint8_t rxBuf_422[BUF_422_SIZE] = {0};
+	uint8_t txBuf_422[BUF_422_SIZE] = {0xBE, 0, 0, 0xEF, 0};
+	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
 	
 	uint8_t rxBuf[50] = { 0 };
 	while (1) {
@@ -480,10 +492,20 @@ int main() {
 		}
 		
 		if (UartRxComplete) {
-			memcpy(rxBuf_422_tx, rxBuf_422_rx, BUF_422_SIZE);
-			UART_write(rxBuf_422_tx, BUF_422_SIZE);
+			if (rxBuf_422[0] == 0xDE && rxBuf_422[3] == 0xAD) {
+				trigger_output = ((uint16_t)rxBuf_422[1] << 8) | rxBuf_422[2];
+			}
+			
+			__disable_irq();
+			uint16_t tmp = detected_objects;	// probably interrupt proof
+			detected_objects = 0;
+			__enable_irq();
+			
+			txBuf_422[1] = (tmp >> 8) & 0xFF;
+			txBuf_422[2] = tmp & 0xFF;
+			UART_write(txBuf_422, BUF_422_SIZE);
 			UartRxComplete = 0;
-			UART_read((uint8_t*)rxBuf_422_rx, BUF_422_SIZE);
+			UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
 		}
 	}
 }
