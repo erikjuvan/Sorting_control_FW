@@ -91,7 +91,7 @@ uint16_t detected_objects = 0;
 /////////////////////////////////////
 void SysTick_Handler(void) {
 	HAL_IncTick();
-	HAL_SYSTICK_IRQHandler();			
+	HAL_SYSTICK_IRQHandler();	
 }
 
 void OTG_FS_IRQHandler(void) {
@@ -492,19 +492,22 @@ __attribute__((optimize("O2"))) int main() {
 		}
 		
 		if (UartRxComplete) {
+			UartRxComplete = 0;
+			GPIOE->BSRR = GPIO_PIN_7;
+			
 			if (rxBuf_422[0] == 0xDE && rxBuf_422[3] == 0xAD) {
 				trigger_output = ((uint16_t)rxBuf_422[1] << 8) | rxBuf_422[2];
 			}
 			
 			__disable_irq();
-			uint16_t tmp = detected_objects;	// probably interrupt proof
+			uint16_t tmp = detected_objects;
 			detected_objects = 0;
 			__enable_irq();
 			
 			txBuf_422[1] = (tmp >> 8) & 0xFF;
-			txBuf_422[2] = tmp & 0xFF;
+			txBuf_422[2] = tmp & 0xFF;			
 			UART_write(txBuf_422, BUF_422_SIZE);
-			UartRxComplete = 0;
+			GPIOE->BSRR = GPIO_PIN_7 << 16;			
 			UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
 		}
 	}
