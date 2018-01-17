@@ -19,8 +19,6 @@ int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size); 
 extern char g_VCPInitialized;
 
-extern __IO uint8_t UartRxComplete;
-
 #define GPIO_SET_BIT(PORT, BIT)		PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT)		PORT->BSRR = (BIT << 16)
 
@@ -468,14 +466,9 @@ static void Init() {
 
 }
 
-__attribute__((optimize("O2"))) int main() {				
+int main() {				
 	Init();
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
-	
-	#define BUF_422_SIZE	10
-	uint8_t rxBuf_422[BUF_422_SIZE] = {0};
-	uint8_t txBuf_422[BUF_422_SIZE] = {0xBE, 0, 0, 0xEF, 0};
-	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);			
 	
 	uint8_t rxBuf[50] = { 0 };
 	while (1) {
@@ -489,26 +482,6 @@ __attribute__((optimize("O2"))) int main() {
 		if (writeToPC) {
 			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
 			writeToPC = 0;
-		}
-		
-		if (UartRxComplete) {
-			UartRxComplete = 0;
-			GPIOE->BSRR = GPIO_PIN_7;
-			
-			if (rxBuf_422[0] == 0xDE && rxBuf_422[3] == 0xAD) {
-				trigger_output = ((uint16_t)rxBuf_422[1] << 8) | rxBuf_422[2];
-			}
-			
-			__disable_irq();
-			uint16_t tmp = detected_objects;
-			detected_objects = 0;
-			__enable_irq();
-			
-			txBuf_422[1] = (tmp >> 8) & 0xFF;
-			txBuf_422[2] = tmp & 0xFF;			
-			UART_write(txBuf_422, BUF_422_SIZE);
-			GPIOE->BSRR = GPIO_PIN_7 << 16;			
-			UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
 		}
 	}
 }

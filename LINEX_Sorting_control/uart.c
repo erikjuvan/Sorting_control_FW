@@ -1,17 +1,39 @@
 #include "uart.h"
 
+extern uint16_t trigger_output;
+extern uint16_t detected_objects;
+
 UART_HandleTypeDef UartHandle;
-__IO uint8_t UartRxComplete = 0;
+
+#define BUF_422_SIZE	10
+uint8_t rxBuf_422[BUF_422_SIZE] = {0};
+uint8_t txBuf_422[BUF_422_SIZE] = {0xBE, 0, 0, 0xEF, 0};
 
 // IRQ
 /////////////////////////////
 void USARTx_IRQHandler() {
 	HAL_UART_IRQHandler(&UartHandle);
 }
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle) {
+
+__attribute__((optimize("O2"))) void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle) {
 }
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
-	UartRxComplete = 1;
+
+__attribute__((optimize("O2"))) void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
+
+	if (rxBuf_422[0] == 0xDE && rxBuf_422[3] == 0xAD) {
+		uint16_t tmp = ((uint16_t)rxBuf_422[1] << 8) | rxBuf_422[2];
+		trigger_output = tmp;
+	}
+	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
+			
+	__disable_irq();
+	uint16_t tmp = detected_objects;
+	detected_objects = 0;
+	__enable_irq();
+			
+	txBuf_422[1] = (tmp >> 8) & 0xFF;
+	txBuf_422[2] = tmp & 0xFF;			
+	UART_write(txBuf_422, BUF_422_SIZE);					
 }
 /////////////////////////////
 
@@ -56,9 +78,9 @@ void UART_init() {
 	UartHandle.Init.Mode       = UART_MODE_TX_RX;
 	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;
 	
-	UartRxComplete = 0;
-	
 	HAL_UART_Init(&UartHandle);	
+	
+	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
 }
 
 void UART_read(uint8_t* data_in, int len) {
@@ -68,38 +90,3 @@ void UART_read(uint8_t* data_in, int len) {
 void UART_write(uint8_t* data_out, int len) {
 	HAL_UART_Transmit_IT(&UartHandle, data_out, len);
 }
-
-/* Example
-
-	UART_Init();
-
-	char rxBuf_422[255] = {0};
-	char rxBuf_usb[50] = {0};
-	int read = 0, ret = 0;
-	const char rxEcho[] = "PLC_RX_STATUS_OK";
-	UART_Read((uint8_t*)rxBuf_422, 4);
-	
-	while (1) {
-		
-		ret = VCP_read(&rxBuf_usb[read], sizeof(rxBuf_usb) - read);
-		while (ret) {
-			read += ret;
-			HAL_Delay(10);
-			ret = VCP_read(&rxBuf_usb[read], sizeof(rxBuf_usb) - read);
-		}
-
-		if (read > 0) {
-			GPIOC->BSRR = GPIO_PIN_8 | GPIO_PIN_9;
-			UART_Write((uint8_t*)rxBuf_usb, read);					
-			read = 0;
-		}
-		
-		GPIOC->BSRR = GPIO_PIN_9 << 16;
-		if (UartRxComplete) {
-			GPIOC->BSRR = GPIO_PIN_8 << 16;
-			VCP_write(rxBuf_422, 4);
-			UartRxComplete = 0;
-			UART_Read((uint8_t*)rxBuf_422, 4);
-		}		
-	}
-*/
