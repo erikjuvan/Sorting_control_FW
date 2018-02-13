@@ -85,6 +85,7 @@ uint8_t writeToPC = 0;
 uint16_t trigger_output = 0;
 uint16_t detected_objects = 0;
 
+int training = 0;
 float trained_coeffs[N_CHANNELS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 // IRQ
@@ -123,19 +124,31 @@ __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 			fBuf[i] = (float)Buffer[BUFFER_SIZE/2][i];
 	}
 	
-	if (display_data == RAW) {
-		AddValues(fBuf);
-	} else if (display_data == TRAINED) {
-		for (int i = 0; i < N_CHANNELS; ++i) {
-			fBuf[i] *= trained_coeffs[i];
+	if (training) {
+		training--;
+		const float A = 0.01;
+		for (int i = 0; i < N_CHANNELS; ++i)
+			trained_coeffs[i] = A * fBuf[i] + (1 - A) * trained_coeffs[i];
+		
+		if (training <= 0) {
+			for (int i = 0; i < N_CHANNELS; ++i)
+				trained_coeffs[i] = 1000.0 / trained_coeffs[i];
 		}
-		AddValues(fBuf);
-	} else if (display_data == FILTERED) {
-		for (int i = 0; i < N_CHANNELS; ++i) {
-			fBuf[i] *= trained_coeffs[i];
-		}
-		Filter(fBuf);
-	} 
+	} else {
+		if (display_data == RAW) {
+			AddValues(fBuf);
+		} else if (display_data == TRAINED) {
+			for (int i = 0; i < N_CHANNELS; ++i) {
+				fBuf[i] *= trained_coeffs[i];
+			}
+			AddValues(fBuf);
+		} else if (display_data == FILTERED) {
+			for (int i = 0; i < N_CHANNELS; ++i) {
+				fBuf[i] *= trained_coeffs[i];
+			}
+			Filter(fBuf);
+		} 
+	}
 	
 	for (int i = 0; i < N_CHANNELS; ++i) {
 		if (delay_timer[i] >= 0) {			
@@ -388,7 +401,8 @@ int ParseCMD(uint8_t *buf, int len) {
 	}
 	
 	else if (strncmp((char *)pt, "CTRAIN", strlen((char*)pt)) == 0) {		
-		Train();		
+		//Train();
+		training = 1000;
 	} 
 	
 	else if (strncmp((char *)pt, "CRAW", strlen((char*)pt)) == 0) {
