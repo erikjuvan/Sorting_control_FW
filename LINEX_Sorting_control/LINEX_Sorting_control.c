@@ -47,8 +47,8 @@ extern char g_VCPInitialized;
 //#define	DEBUG_TIM
 //#define	STOPWATCH
 
-void AddValues(void* x);
-void Filter(uint32_t* x);
+void AddValues(float* x);
+void Filter(float* x);
 
 ADC_HandleTypeDef	ADC1_Handle;
 DMA_HandleTypeDef	DMA2_Handle;
@@ -58,7 +58,6 @@ uint32_t	Buffer[BUFFER_SIZE][N_CHANNELS] = { 0 };
 #define		SEND_BUFFER_SIZE (N_CHANNELS * 100)
 uint32_t	SendBuffer_i = 0;
 float		SendBuffer[SEND_BUFFER_SIZE] = { 0 };
-
 
 // GUI settable parameters
 float A1 = 0.01;
@@ -79,11 +78,14 @@ int32_t duration_timer[N_CHANNELS] = {0};
 int32_t delay_timer[N_CHANNELS] = {0};
 uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
 
-int		filtered = 1;
+typedef enum {RAW, TRAINED, FILTERED} DisplayData;
+DisplayData display_data = RAW; 
 uint8_t writeToPC = 0;
 
 uint16_t trigger_output = 0;
 uint16_t detected_objects = 0;
+
+float trained_coeffs[N_CHANNELS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
 
 // IRQ
 /////////////////////////////////////
@@ -103,32 +105,39 @@ void TIM2_IRQHandler() {
 }
 #endif
 
-__attribute__((optimize("O2"))) void DMA2_Stream0_IRQHandler() {
+__attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 	
 #ifdef DEBUG_TIM
 	GPIOC->BSRR = GPIO_PIN_11 << 16;
 #endif
 
+	float fBuf[N_CHANNELS];
+	
 	if (DMA2->LISR & DMA_LISR_HTIF0) {			// If half-transfer complete
-		DMA2->LIFCR = DMA_LIFCR_CHTIF0;			// clear half transfer complete interrupt flag				
-		
-		if (filtered) {
-			Filter(&Buffer[0][0]);
-		} else {
-			AddValues(&Buffer[0][0]);
-		}	
-					
+		DMA2->LIFCR = DMA_LIFCR_CHTIF0;			// clear half transfer complete interrupt flag
+		for (int i = 0; i < N_CHANNELS; ++i)
+			fBuf[i] = (float)Buffer[0][i];									
 	} else if (DMA2->LISR & DMA_LISR_TCIF0) {	// If transfer complete
 		DMA2->LIFCR = DMA_LIFCR_CTCIF0;			// clear half transfer complete interrupt flag
-		
-		if (filtered) {
-			Filter(&Buffer[BUFFER_SIZE/2][0]);
-		} else {
-			AddValues(&Buffer[BUFFER_SIZE/2][0]);	
-		}			
+		for (int i = 0; i < N_CHANNELS; ++i)
+			fBuf[i] = (float)Buffer[BUFFER_SIZE/2][i];
 	}
 	
-	for (int i = 0; i < N_CHANNELS; ++i) {		
+	if (display_data == RAW) {
+		AddValues(fBuf);
+	} else if (display_data == TRAINED) {
+		for (int i = 0; i < N_CHANNELS; ++i) {
+			fBuf[i] *= trained_coeffs[i];
+		}
+		AddValues(fBuf);
+	} else if (display_data == FILTERED) {
+		for (int i = 0; i < N_CHANNELS; ++i) {
+			fBuf[i] *= trained_coeffs[i];
+		}
+		Filter(fBuf);
+	} 
+	
+	for (int i = 0; i < N_CHANNELS; ++i) {
 		if (delay_timer[i] >= 0) {			
 			if (delay_timer[i]-- == 0) {
 				GPIOE->BSRR = GPIO_Pins[i];
@@ -314,6 +323,47 @@ void ChangeSampleFrequency() {
 	TIMx->EGR = TIM_EGR_UG;		
 }
 
+static void Train() {
+	uint32_t adc_channels[] = {ADC_CHANNEL_10, ADC_CHANNEL_11, ADC_CHANNEL_12, ADC_CHANNEL_13, ADC_CHANNEL_0, ADC_CHANNEL_1, ADC_CHANNEL_2, ADC_CHANNEL_3};
+	
+	HAL_ADC_Stop_DMA(&ADC1_Handle);
+	
+	ADC1_Handle.Init.ScanConvMode = DISABLE;
+	ADC1_Handle.Init.NbrOfConversion = 1;
+	ADC1_Handle.Init.DMAContinuousRequests = DISABLE;
+	ADC1_Handle.Init.EOCSelection = DISABLE;
+	HAL_ADC_Init(&ADC1_Handle);
+	
+	ADC_ChannelConfTypeDef adcChannelConfig;
+	
+	adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;	// ADC_SAMPLETIME_84CYCLES
+	adcChannelConfig.Rank = 1;	
+	
+	for (int adc_idx = 0; adc_idx < N_CHANNELS; ++adc_idx) {
+	
+		adcChannelConfig.Channel = adc_channels[adc_idx];	
+		if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+		}
+		
+		uint32_t accum = 0;
+		const int Size = 1000;
+		
+		for (int i = 0; i < Size; ++i) {
+			HAL_ADC_Start(&ADC1_Handle);
+			if (HAL_ADC_PollForConversion(&ADC1_Handle, 500) == HAL_OK)
+				accum += HAL_ADC_GetValue(&ADC1_Handle);
+		}
+		
+		HAL_ADC_Stop(&ADC1_Handle);
+		float avg = accum / Size;
+		trained_coeffs[adc_idx] = 1000.0 / avg;
+	}
+	
+	HAL_ADC_Stop(&ADC1_Handle);
+	ADC_Configure();
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+}
+
 int ParseCMD(uint8_t *buf, int len) {
 	uint8_t *pt = NULL;
 	
@@ -333,16 +383,24 @@ int ParseCMD(uint8_t *buf, int len) {
 		}
 	} 
 	
-	else if (strncmp((char *)pt, "CRST", strlen((char*)pt)) == 0) {
+	else if (strncmp((char *)pt, "CRESET", strlen((char*)pt)) == 0) {
 		
+	}
+	
+	else if (strncmp((char *)pt, "CTRAIN", strlen((char*)pt)) == 0) {		
+		Train();		
 	} 
 	
 	else if (strncmp((char *)pt, "CRAW", strlen((char*)pt)) == 0) {
-		filtered = 0;
+		display_data = RAW;
+	}
+	
+	else if (strncmp((char *)pt, "CTRAINED", strlen((char*)pt)) == 0) {
+		display_data = TRAINED;
 	} 
 	
-	else if (strncmp((char *)pt, "CFILTR", strlen((char*)pt)) == 0) {
-		filtered = 1;
+	else if (strncmp((char *)pt, "CFILTERED", strlen((char*)pt)) == 0) {
+		display_data = FILTERED;
 	} 
 	
 	else if (strncmp((char *)pt, "CPARAMS", strlen((char*)pt)) == 0) {
@@ -379,7 +437,7 @@ int ParseCMD(uint8_t *buf, int len) {
 	return 1;
 }
 
-__attribute__((optimize("O2"))) void AddValues(void* x) {	
+__attribute__((optimize("O2"))) void AddValues(float* x) {	
 	memcpy(&SendBuffer[SendBuffer_i], x, N_CHANNELS * sizeof(float));
 	SendBuffer_i += N_CHANNELS;
 
@@ -403,7 +461,7 @@ __attribute__((optimize("O2"))) void ObjectDetected(int idx) {
 	detected_objects |= 1 << idx;
 }
 
-__attribute__((optimize("O2"))) void Filter(uint32_t* x) {
+__attribute__((optimize("O2"))) void Filter(float* x) {
 	/*
 	1.stage: LPF
 	y[i] = a * x[i] + (1 - a) * y[i - 1]
