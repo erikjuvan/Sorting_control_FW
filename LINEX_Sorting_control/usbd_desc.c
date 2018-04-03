@@ -2,8 +2,8 @@
   ******************************************************************************
   * @file    USB_Device/CDC_Standalone/Src/usbd_desc.c
   * @author  MCD Application Team
-  * @version V1.2.2
-  * @date    25-May-2015
+  * @version V1.0.0
+  * @date    22-May-2015
   * @brief   This file provides the USBD descriptors and string formating method.
   ******************************************************************************
   * @attention
@@ -150,7 +150,7 @@ uint8_t *USBD_VCP_LangIDStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
   */
 uint8_t *USBD_VCP_ProductStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
 {
-  if(speed == 0)
+  if(speed == USBD_SPEED_HIGH)
   {   
     USBD_GetString((uint8_t *)USBD_PRODUCT_HS_STRING, USBD_StrDesc, length);
   }
@@ -216,7 +216,7 @@ uint8_t *USBD_VCP_ConfigStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
   */
 uint8_t *USBD_VCP_InterfaceStrDescriptor(USBD_SpeedTypeDef speed, uint16_t *length)
 {
-  if(speed == 0)
+  if(speed == USBD_SPEED_HIGH)
   {
     USBD_GetString((uint8_t *)USBD_INTERFACE_HS_STRING, USBD_StrDesc, length);
   }

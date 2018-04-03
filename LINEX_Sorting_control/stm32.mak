@@ -3,12 +3,7 @@
 #DO NOT EDIT MANUALLY. THE FILE WILL BE OVERWRITTEN. 
 #Use VisualGDB Project Properties dialog or modify Makefile or per-configuration .mak files instead.
 
-#VisualGDB provides BSP_ROOT and TOOLCHAIN_ROOT via environment when running Make. The line below will only be active if GNU Make is started manually.
-BSP_ROOT ?= $(LOCALAPPDATA)/VisualGDB/EmbeddedBSPs/arm-eabi/com.sysprogs.arm.stm32
-EFP_BASE ?= $(LOCALAPPDATA)/VisualGDB/EmbeddedEFPs
-TESTFW_BASE ?= $(LOCALAPPDATA)/VisualGDB/TestFrameworks
-TOOLCHAIN_ROOT ?= C:/SysGCC/arm-eabi
-
+#In order to build this project manually (outside VisualGDB), please provide TOOLCHAIN_ROOT, BSP_ROOT, EFP_BASE and TESTFW_BASE variables via Environment or Make command line
 #Embedded toolchain
 CC := $(TOOLCHAIN_ROOT)/bin/arm-eabi-gcc.exe
 CXX := $(TOOLCHAIN_ROOT)/bin/arm-eabi-g++.exe
@@ -17,8 +12,8 @@ AR := $(TOOLCHAIN_ROOT)/bin/arm-eabi-ar.exe
 OBJCOPY := $(TOOLCHAIN_ROOT)/bin/arm-eabi-objcopy.exe
 
 #Additional flags
-PREPROCESSOR_MACROS += ARM_MATH_CM4 STM32F407VE flash_layout STM32F407xx USE_USB_FS
-INCLUDE_DIRS += . $(BSP_ROOT)/STM32F4xxxx/STM32F4xx_HAL_Driver/Inc $(BSP_ROOT)/STM32F4xxxx/STM32F4xx_HAL_Driver/Inc/Legacy $(BSP_ROOT)/STM32F4xxxx/CMSIS_HAL/Device/ST/STM32F4xx/Include $(BSP_ROOT)/STM32F4xxxx/CMSIS_HAL/Include $(BSP_ROOT)/STM32_USB_Device_Library/Core/Inc $(BSP_ROOT)/STM32_USB_Device_Library/Class/CDC/Inc
+PREPROCESSOR_MACROS += ARM_MATH_CM7 STM32F745VE flash_layout STM32F745xx USE_USB_FS
+INCLUDE_DIRS += . $(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc $(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc/Legacy $(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Device/ST/STM32F7xx/Include $(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Include $(BSP_ROOT)/STM32_USB_Device_Library/Core/Inc $(BSP_ROOT)/STM32_USB_Device_Library/Class/CDC/Inc
 LIBRARY_DIRS += 
 LIBRARY_NAMES += 
 ADDITIONAL_LINKER_INPUTS += 
@@ -27,8 +22,8 @@ LINUX_PACKAGES +=
 
 CFLAGS += 
 CXXFLAGS += 
-ASFLAGS += -mfpu=fpv4-sp-d16
+ASFLAGS += 
 LDFLAGS +=  
-COMMONFLAGS += -mcpu=cortex-m4 -mthumb -mfloat-abi=hard
-LINKER_SCRIPT := $(BSP_ROOT)/STM32F4xxxx/LinkerScripts/STM32F407VE_flash.lds
+COMMONFLAGS += -mcpu=cortex-m7 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+LINKER_SCRIPT := $(BSP_ROOT)/STM32F7xxxx/LinkerScripts/STM32F745VE_flash.lds
 

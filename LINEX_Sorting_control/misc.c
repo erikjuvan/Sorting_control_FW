@@ -1,4 +1,4 @@
-#include "stm32f4xx_hal.h"
+#include "stm32f7xx_hal.h"
 
 int VCP_read(void *pBuffer, int size);
 

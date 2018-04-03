@@ -22,24 +22,13 @@ extern char g_VCPInitialized;
 #define GPIO_SET_BIT(PORT, BIT)		PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT)		PORT->BSRR = (BIT << 16)
 
-#define DEBUG_PIN	GPIO_PIN_11
-#define DEBUG_PORT	GPIOC
-#define DEBUG_CLK	__GPIOC_CLK_ENABLE
+#define IR_LED_PORT			GPIOE
+#define IR_LED_PIN			GPIO_PIN_8
+#define IR_LED_CLK			__GPIOE_CLK_ENABLE
 
-#define DEBUG_PIN1	GPIO_PIN_7
-#define DEBUG_PORT1	GPIOC
-#define DEBUG_CLK1	__GPIOC_CLK_ENABLE
-
-#define DEBUG_PIN2	GPIO_PIN_4
-#define DEBUG_PORT2	GPIOD
-#define DEBUG_CLK2	__GPIOD_CLK_ENABLE
-
-#define DEBUG_TOGGLE()		DEBUG_PORT->ODR ^= DEBUG_PIN;
-#define DEBUG1_TOGGLE()		DEBUG_PORT1->ODR ^= DEBUG_PIN1;
-#define DEBUG2_TOGGLE()		DEBUG_PORT2->ODR ^= DEBUG_PIN2;
-
-#define TIMx				TIM2
-#define TIMx_CLK_ENALBE		__TIM2_CLK_ENABLE
+#define TIMx				TIM1
+#define TIMx_CLK_ENALBE		__TIM1_CLK_ENABLE
+#define TIMx_IRQ_Handler	TIM1_IRQHandler
 
 #define	N_CHANNELS		8
 #define	BUFFER_SIZE		2
@@ -76,7 +65,7 @@ struct {
 
 int32_t duration_timer[N_CHANNELS] = {0};
 int32_t delay_timer[N_CHANNELS] = {0};
-uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_8, GPIO_PIN_9, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14};
+uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
 typedef enum {RAW, TRAINED, FILTERED} DisplayData;
 DisplayData display_data = RAW; 
@@ -100,16 +89,16 @@ void OTG_FS_IRQHandler(void) {
 }
 
 #ifdef DEBUG_TIM
-void TIM2_IRQHandler() {
+void TIMx_IRQ_Handler() {
 	TIMx->SR &= ~(TIM_SR_TIF | TIM_SR_UIF);
-	GPIOC->BSRR = GPIO_PIN_11;
+	GPIOA->BSRR = GPIO_PIN_8;
 }
 #endif
 
 __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 	
 #ifdef DEBUG_TIM
-	GPIOC->BSRR = GPIO_PIN_11 << 16;
+	GPIOA->BSRR = GPIO_PIN_8 << 16;
 #endif
 
 	float fBuf[N_CHANNELS];
@@ -170,27 +159,49 @@ __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 static void SystemClock_Config(void) {
 	RCC_ClkInitTypeDef RCC_ClkInitStruct;
 	RCC_OscInitTypeDef RCC_OscInitStruct;
-
-	__PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
+	RCC_PeriphCLKInitTypeDef PeriphClkInitStruct;
+	
+	/* Enable HSE Oscillator and activate PLL with HSE as source */
 	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
 	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+	RCC_OscInitStruct.HSIState = RCC_HSI_OFF;
 	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
 	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
 	RCC_OscInitStruct.PLL.PLLM = 8;
-	RCC_OscInitStruct.PLL.PLLN = 336;
+	RCC_OscInitStruct.PLL.PLLN = 336;  
 	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
 	RCC_OscInitStruct.PLL.PLLQ = 7;
-	HAL_RCC_OscConfig(&RCC_OscInitStruct);
-
+	if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		asm("bkpt 255");
+	}
+  
+	// Activate the OverDrive to reach the 216 Mhz Frequency
+	/*if(HAL_PWREx_EnableOverDrive() != HAL_OK) {
+		asm("bkpt 255");
+	}*/
+  
+	/* Select PLLSAI output as USB clock source */
+	PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CLK48;
+	PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48SOURCE_PLL;
+	//PeriphClkInitStruct.PLLSAI.PLLSAIN = 384;
+	//PeriphClkInitStruct.PLLSAI.PLLSAIQ = 7; 
+	//PeriphClkInitStruct.PLLSAI.PLLSAIP = RCC_PLLSAIP_DIV8;
+	if(HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct)  != HAL_OK) {
+		asm("bkpt 255");
+	}
+  
+	/* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2 
+	clocks dividers */
 	RCC_ClkInitStruct.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-
 	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
 	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
 	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
-	HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5);
+	if(HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
+		asm("bkpt 255");
+	}
+	
+	SystemCoreClockUpdate();
 }
 
 void DMA_Configure() {
@@ -223,14 +234,17 @@ void ADC_Configure() {
 	GPIO_InitTypeDef	GPIO_InitStructure;
 	
 	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
 	__HAL_RCC_ADC1_CLK_ENABLE();
 	
-	GPIO_InitStructure.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;
+	GPIO_InitStructure.Pin = GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
 	GPIO_InitStructure.Mode = GPIO_MODE_ANALOG;
 	GPIO_InitStructure.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
-	GPIO_InitStructure.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3;
+	GPIO_InitStructure.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStructure);
+	GPIO_InitStructure.Pin = GPIO_PIN_4 | GPIO_PIN_5;
 	HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
 		
 	ADC1_Handle.Instance = ADC1;
@@ -241,7 +255,7 @@ void ADC_Configure() {
 	ADC1_Handle.Init.DiscontinuousConvMode = DISABLE;
 	ADC1_Handle.Init.NbrOfDiscConversion = 0;
 	ADC1_Handle.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-	ADC1_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T2_TRGO;
+	ADC1_Handle.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T1_TRGO;
 	ADC1_Handle.Init.DataAlign = ADC_DATAALIGN_RIGHT;
 	ADC1_Handle.Init.NbrOfConversion = N_CHANNELS;
 	ADC1_Handle.Init.DMAContinuousRequests = ENABLE;
@@ -251,43 +265,43 @@ void ADC_Configure() {
 	ADC_ChannelConfTypeDef adcChannelConfig;
 	
 	adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;	// ADC_SAMPLETIME_84CYCLES
-	adcChannelConfig.Channel = ADC_CHANNEL_0;
-	adcChannelConfig.Rank = 5;	
+	adcChannelConfig.Channel = ADC_CHANNEL_9;
+	adcChannelConfig.Rank = 1;	
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 	
-	adcChannelConfig.Channel = ADC_CHANNEL_1;
-	adcChannelConfig.Rank = 6;
+	adcChannelConfig.Channel = ADC_CHANNEL_8;
+	adcChannelConfig.Rank = 2;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}	
 	
-	adcChannelConfig.Channel = ADC_CHANNEL_2;
-	adcChannelConfig.Rank = 7;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_3;
-	adcChannelConfig.Rank = 8;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_10;
-	adcChannelConfig.Rank = 1;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_11;
-	adcChannelConfig.Rank = 2;
-	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-	}
-	
-	adcChannelConfig.Channel = ADC_CHANNEL_12;
+	adcChannelConfig.Channel = ADC_CHANNEL_15;
 	adcChannelConfig.Rank = 3;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 	
-	adcChannelConfig.Channel = ADC_CHANNEL_13;
+	adcChannelConfig.Channel = ADC_CHANNEL_14;
 	adcChannelConfig.Rank = 4;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_7;
+	adcChannelConfig.Rank = 5;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_6;
+	adcChannelConfig.Rank = 6;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_5;
+	adcChannelConfig.Rank = 7;
+	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+	}
+	
+	adcChannelConfig.Channel = ADC_CHANNEL_4;
+	adcChannelConfig.Rank = 8;
 	if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
 	}
 }
@@ -299,11 +313,13 @@ void TIM_Configure() {
 	TIMx->ARR	= 1e2 - 1;	//1e2 -1
 	TIMx->CR2	= TIM_CR2_MMS_1;
 	TIMx->EGR	= TIM_EGR_UG;   	// Reset the counter and generate update event
-	TIMx->SR	= 0;	// Clear interrupts
-	TIMx->DIER	= TIM_DIER_TIE | TIM_DIER_UIE;
+	TIMx->SR	= 0;	// Clear interrupts	
+	TIMx->DIER	= 0;
 	TIMx->CR1	= TIM_CR1_CEN;
 	
 #ifdef DEBUG_TIM
+	TIMx->DIER	= TIM_DIER_TIE | TIM_DIER_UIE;
+	
 	HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);   
 	HAL_NVIC_EnableIRQ(TIM2_IRQn);
 #endif
@@ -312,23 +328,21 @@ void TIM_Configure() {
 void GPIO_Configure() {
 	GPIO_InitTypeDef	GPIO_InitStructure;
 	
-	DEBUG_CLK();
-	DEBUG_CLK1();
-	__GPIOD_CLK_ENABLE();
-	
-	GPIO_InitStructure.Pin = DEBUG_PIN;
+	// IR LED
+	IR_LED_CLK();
+	GPIO_InitStructure.Pin = IR_LED_PIN;
 	GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStructure.Pull = GPIO_NOPULL;
 	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;	// GPIO_SPEED_FREQ_HIGH
-	HAL_GPIO_Init(DEBUG_PORT, &GPIO_InitStructure);	
+	HAL_GPIO_Init(IR_LED_PORT, &GPIO_InitStructure);
 	
-	GPIO_InitStructure.Pin = DEBUG_PIN1;
-	HAL_GPIO_Init(DEBUG_PORT1, &GPIO_InitStructure);	
-	
-	// Product present GPIO: PE7 (O0) .. PE14 (O7)
-	__GPIOE_CLK_ENABLE();
-	GPIO_InitStructure.Pin = GPIO_PIN_7 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
-	HAL_GPIO_Init(GPIOE, &GPIO_InitStructure);
+	// Product present
+	__GPIOD_CLK_ENABLE();
+	GPIO_InitStructure.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
+	GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStructure.Pull = GPIO_NOPULL;
+	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;	// GPIO_SPEED_FREQ_HIGH
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStructure);
 }
 
 void ChangeSampleFrequency() {
@@ -337,7 +351,7 @@ void ChangeSampleFrequency() {
 }
 
 static void Train() {
-	uint32_t adc_channels[] = {ADC_CHANNEL_10, ADC_CHANNEL_11, ADC_CHANNEL_12, ADC_CHANNEL_13, ADC_CHANNEL_0, ADC_CHANNEL_1, ADC_CHANNEL_2, ADC_CHANNEL_3};
+	uint32_t adc_channels[] = {ADC_CHANNEL_9, ADC_CHANNEL_8, ADC_CHANNEL_15, ADC_CHANNEL_14, ADC_CHANNEL_7, ADC_CHANNEL_6, ADC_CHANNEL_5, ADC_CHANNEL_4};
 	
 	HAL_ADC_Stop_DMA(&ADC1_Handle);
 	
@@ -540,13 +554,15 @@ static void Init() {
 
 int main() {				
 	Init();
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);			
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);					
+	
+	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);	
 	
 	uint8_t rxBuf[50] = { 0 };
 	while (1) {
 		int read = VCP_read(rxBuf, sizeof(rxBuf));	
 		
-		if (read > 0) {					
+		if (read > 0) {	
 			ParseCMD(rxBuf, read);
 			memset(rxBuf, 0, sizeof(rxBuf));
 		}

@@ -253,22 +253,28 @@ int VCP_read(void *pBuffer, int size)
 		s_RxBuffer.ReadDone = 0;
 		USBD_CDC_ReceivePacket(&USBD_Device);
 	}
-	
+
 	return todo;
 }
 
+#ifdef USE_USB_HS
+enum { kMaxOutPacketSize = CDC_DATA_HS_OUT_PACKET_SIZE };
+#else
+enum { kMaxOutPacketSize = CDC_DATA_FS_OUT_PACKET_SIZE };
+#endif
+
 int VCP_write(const void *pBuffer, int size)
 {
-	if (size > CDC_DATA_FS_MAX_PACKET_SIZE)	// CDC_DATA_HS_OUT_PACKET_SIZE
+    if (size > kMaxOutPacketSize)
 	{
-		for (int offset = 0; offset < size;)
+		int offset;
+    	int done = 0;
+    	for (offset = 0; offset < size; offset += done)
 		{
-			int todo = MIN(CDC_DATA_FS_MAX_PACKET_SIZE,	//CDC_DATA_HS_OUT_PACKET_SIZE
-				size - offset);
-			int done = VCP_write(((char *)pBuffer) + offset, todo);
+    		int todo = MIN(kMaxOutPacketSize, size - offset);
+			done = VCP_write(((char *)pBuffer) + offset, todo);
 			if (done != todo)
 				return offset + done;
-			offset += done;
 		}
 
 		return size;
@@ -281,7 +287,7 @@ int VCP_write(const void *pBuffer, int size)
 	USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t *)pBuffer, size);
 	if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
 		return 0;
-	
+
 	/* Matjazev fix trenutno ni potreben
 	// VCP problem with transmitting arrays sized as multiples of packet size.
 	if (!(size & CDC_DATA_FS_OUT_PACKET_SIZE - 1)) 
