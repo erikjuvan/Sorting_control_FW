@@ -1,73 +1,74 @@
+#include <string.h>
 #include "uart.h"
-
-extern uint16_t trigger_output;
-extern uint16_t detected_objects;
 
 UART_HandleTypeDef UartHandle;
 
-#define BUF_422_SIZE	10
-uint8_t rxBuf_422[BUF_422_SIZE] = {0};
-uint8_t txBuf_422[BUF_422_SIZE] = {0xBE, 0, 0, 0xEF, 0};
+static struct {
+	uint8_t data[UART_BUFFER_SIZE];
+	int		i;
+	int		overflow;
+} uart_rx_buffer;
 
-// IRQ
-/////////////////////////////
+static struct {
+	uint8_t data[UART_BUFFER_SIZE];
+	int		i, size;
+} uart_tx_buffer;
+
 void USARTx_IRQHandler() {
-	HAL_UART_IRQHandler(&UartHandle);
-}
+	uint32_t isrflags = USARTx->ISR;
+	uint32_t cr1its = USARTx->CR1;
 
-__attribute__((optimize("O2"))) void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle) {
-}
-
-__attribute__((optimize("O2"))) void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
-
-	if (rxBuf_422[0] == 0xDE && rxBuf_422[3] == 0xAD) {
-		uint16_t tmp = ((uint16_t)rxBuf_422[1] << 8) | rxBuf_422[2];
-		trigger_output = tmp;
+	if ((isrflags & USART_ISR_RXNE) && (cr1its & USART_CR1_RXNEIE)) {
+		if (uart_rx_buffer.i < UART_BUFFER_SIZE) {
+			uart_rx_buffer.data[uart_rx_buffer.i++] = USARTx->RDR;
+		} else {
+			uart_rx_buffer.overflow = 1;
+		}
 	}
-	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
-			
-	__disable_irq();
-	uint16_t tmp = detected_objects;
-	detected_objects = 0;
-	__enable_irq();
-			
-	txBuf_422[1] = (tmp >> 8) & 0xFF;
-	txBuf_422[2] = tmp & 0xFF;			
-	UART_write(txBuf_422, BUF_422_SIZE);					
-}
-/////////////////////////////
 
-void HAL_UART_MspInit(UART_HandleTypeDef *huart) {  
-	
+	if ((isrflags & USART_ISR_TXE) && (cr1its & USART_CR1_TXEIE)) {
+		USARTx->TDR = uart_tx_buffer.data[uart_tx_buffer.i++];
+		if (uart_tx_buffer.i >= uart_tx_buffer.size) 
+			USARTx->CR1 &= ~USART_CR1_TXEIE;
+	}
+}
+
+void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
 	GPIO_InitTypeDef  GPIO_InitStruct;
-  	
+
+	RCC_PeriphCLKInitTypeDef RCC_PeriphClkInit;
+
+	/*##-1- Enable peripherals and GPIO Clocks #################################*/
 	/* Enable GPIO TX/RX clock */
 	USARTx_TX_GPIO_CLK_ENABLE();
 	USARTx_RX_GPIO_CLK_ENABLE();
-	/* Enable USART clock */
-	USARTx_CLK_ENABLE(); 
 
+	/* Select SysClk as source of USART1 clocks */
+	RCC_PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
+	RCC_PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_SYSCLK;
+	HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphClkInit);
+
+	/* Enable USARTx clock */
+	USARTx_CLK_ENABLE();
+
+	/*##-2- Configure peripheral GPIO ##########################################*/
 	/* UART TX GPIO pin configuration  */
 	GPIO_InitStruct.Pin       = USARTx_TX_PIN;
 	GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull      = GPIO_NOPULL;
-	GPIO_InitStruct.Speed     = GPIO_SPEED_FAST;
+	GPIO_InitStruct.Pull      = GPIO_PULLUP;
+	GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_MEDIUM;
 	GPIO_InitStruct.Alternate = USARTx_TX_AF;
-  
+
 	HAL_GPIO_Init(USARTx_TX_GPIO_PORT, &GPIO_InitStruct);
-    
+
 	/* UART RX GPIO pin configuration  */
 	GPIO_InitStruct.Pin = USARTx_RX_PIN;
 	GPIO_InitStruct.Alternate = USARTx_RX_AF;
-    
-	HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);
-    
-	/* NVIC for USARTx */
-	HAL_NVIC_SetPriority(USARTx_IRQn, 1, 1);
-	HAL_NVIC_EnableIRQ(USARTx_IRQn);
+
+	HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);		
 }
 
-void UART_init() {
+void UART_Init() {
 	UartHandle.Instance        = USARTx;
 
 	UartHandle.Init.BaudRate   = 115200;
@@ -80,13 +81,47 @@ void UART_init() {
 	
 	HAL_UART_Init(&UartHandle);	
 	
-	UART_read((uint8_t*)rxBuf_422, BUF_422_SIZE);
+	HAL_NVIC_SetPriority(USARTx_IRQn, 0, 1);
+	HAL_NVIC_EnableIRQ(USARTx_IRQn);
+	
+	USARTx->CR1 |= USART_CR1_RXNEIE;
 }
 
-void UART_read(uint8_t* data_in, int len) {
-	HAL_UART_Receive_IT(&UartHandle, data_in, len);
+int UART_CheckAndClearOverflow() {
+	int of = uart_rx_buffer.overflow;
+	uart_rx_buffer.overflow = 0;
+	return of;
 }
 
-void UART_write(uint8_t* data_out, int len) {
-	HAL_UART_Transmit_IT(&UartHandle, data_out, len);
+int UART_BytesToRead() {
+	return uart_rx_buffer.i;
 }
+
+int UART_Read(uint8_t* data, int max_len) {
+	if (uart_rx_buffer.i <= 0) {
+		return 0;
+	} else {	// There is data
+		USARTx->CR1 &= ~USART_CR1_RXNEIE;
+		int len = uart_rx_buffer.i > max_len ? max_len : uart_rx_buffer.i;
+	
+		memcpy(data, uart_rx_buffer.data, len);
+		uart_rx_buffer.i = 0;
+		USARTx->CR1 |= USART_CR1_RXNEIE;
+		return len;
+	}
+}
+
+int UART_Write(uint8_t* data, int size) {
+	int ret = 0;
+	
+	if (size > 0 && !(USARTx->CR1 & USART_CR1_TXEIE)) {
+		uart_tx_buffer.size = size > sizeof(uart_tx_buffer.data) ? sizeof(uart_tx_buffer.data) : size;
+		ret = uart_tx_buffer.size;
+		uart_tx_buffer.i = 0;
+		memcpy(uart_tx_buffer.data, data, uart_tx_buffer.size);
+		USARTx->CR1 |= USART_CR1_TXEIE;
+	}
+	
+	return ret;
+}
+

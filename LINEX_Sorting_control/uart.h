@@ -2,6 +2,10 @@
 
 #include "stm32f7xx_hal.h"
 
+#define UART_DEVICE_ADDRESS	1
+
+#define UART_BUFFER_SIZE	1024
+
 #define USARTx                           USART3
 #define USARTx_CLK_ENABLE()              __HAL_RCC_USART3_CLK_ENABLE();
 #define USARTx_RX_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOB_CLK_ENABLE()
@@ -22,6 +26,7 @@
 #define USARTx_IRQn                      USART3_IRQn
 #define USARTx_IRQHandler                USART3_IRQHandler
 
-void UART_init();
-void UART_read(uint8_t* data_in, int len);
-void UART_write(uint8_t* data_out, int len);
+void UART_Init();
+int UART_Read(uint8_t* data, int max_len);
+int UART_Write(uint8_t* data, int size);
+int UART_BytesToRead();

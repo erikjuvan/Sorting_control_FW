@@ -8,6 +8,7 @@
 #include <math.h>
 
 #include "uart.h"
+#include "protocol.h"
 
 USBD_HandleTypeDef USBD_Device;
 void SysTick_Handler(void);
@@ -76,6 +77,8 @@ uint16_t detected_objects = 0;
 
 int training = 0;
 float trained_coeffs[N_CHANNELS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+
+int usb_live = 0;
 
 // IRQ
 /////////////////////////////////////
@@ -524,10 +527,7 @@ __attribute__((optimize("O2"))) void Filter(float* x) {
 	AddValues(y4);
 }
 
-static void Init() {
-	HAL_Init();	
-	SystemClock_Config();
-
+static void USB_Init() {
 	USBD_Init(&USBD_Device, &VCP_Desc, 0);
 
 	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
@@ -536,15 +536,28 @@ static void Init() {
 	
 	// Wait for USB to Initialize
 	while (USBD_Device.pClassData == 0) {
-	}			
+	}
 	
+	usb_live = 1;
+}
+
+static void USB_Deinit() {
+	USBD_Stop(&USBD_Device);
+	USBD_DeInit(&USBD_Device);
+	
+	usb_live = 0;
+}
+
+static void Init() {
+	HAL_Init();	
+	SystemClock_Config();
+	//USB_Init();	// enable it with UART if neccessary
 	GPIO_Configure();
 	ADC_Configure();
 	DMA_Configure();
 	TIM_Configure();
-	
-	// UART
-	UART_init();
+		
+	UART_Init();
 	
 #ifdef STOPWATCH
 	EnableCC();	  
@@ -552,25 +565,75 @@ static void Init() {
 
 }
 
+
+static int Interpreter_Write(uint8_t* data, int size) {
+	
+	Protocol_Write(data, size);
+	
+	return 1;
+}
+
+static int Interpreter_Read() {
+	const int Size_of_buf = 100;
+	uint8_t uart_rx_buf[Size_of_buf];
+	uint8_t uart_tx_buf[Size_of_buf];
+	int read = 0, tmp = 0;
+	
+	do {
+		tmp = Protocol_Read(&uart_rx_buf[read], Size_of_buf - read);
+		if (tmp > 0) {
+			HAL_Delay(1);
+			read += tmp;
+		}
+	} while (tmp);	
+	
+	if (read == 2) {	// 2 = size of parsed packet sent from PLC (PLC sends more data which is parsed by protocol_read)
+		
+		trigger_output = ((uint16_t)uart_rx_buf[0] << 8) | uart_rx_buf[1];
+		
+		__disable_irq();
+		uint16_t det_obj = detected_objects;
+		detected_objects = 0;
+		__enable_irq();
+		
+		uart_tx_buf[0] = (det_obj >> 8) & 0xFF;
+		uart_tx_buf[1] = det_obj & 0xFF;
+		Interpreter_Write(uart_tx_buf, 2);
+		
+		return 1;
+	} else if (read > 2) {	// we received a command. This is temporary since we want to have a state machine, but for testing this will do
+		ParseCMD(uart_rx_buf, read);	
+	}
+	
+	return 0;
+}
+
+
 int main() {				
 	Init();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);					
 	
-	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);	
+	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
 	
-	uint8_t rxBuf[50] = { 0 };
+	uint8_t rxBuf[100] = { 0 };
 	while (1) {
-		int read = VCP_read(rxBuf, sizeof(rxBuf));	
-		
-		if (read > 0) {	
-			ParseCMD(rxBuf, read);
-			memset(rxBuf, 0, sizeof(rxBuf));
-		}
 
-		if (writeToPC) {
-			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
-			writeToPC = 0;
+		if (usb_live) {
+			int read = VCP_read(rxBuf, sizeof(rxBuf));	
+		
+			if (read > 0) {	
+				ParseCMD(rxBuf, read);
+				memset(rxBuf, 0, sizeof(rxBuf));
+			}
+
+			if (writeToPC) {
+				VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
+				writeToPC = 0;
+			}
+		} else {
+			Interpreter_Read();
 		}
+		
 	}
 }
 

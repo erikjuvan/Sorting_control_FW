@@ -689,6 +689,9 @@
     <ClCompile Include="system_stm32f7xx.c">
       <Filter>Source files</Filter>
     </ClCompile>
+    <ClCompile Include="protocol.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="usbd_cdc_if.h">
@@ -704,6 +707,9 @@
       <Filter>Header files</Filter>
     </ClInclude>
     <ClInclude Include="stm32f7xx_hal_conf.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>
