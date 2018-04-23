@@ -567,7 +567,7 @@ static void Init() {
 
 }
 
-void main() {
+int main() {
 	uint8_t rxBuf[1024] = {0};
 	uint8_t txBuf[10] = {0};
 	int tmp = 0, read = 0;
@@ -578,13 +578,12 @@ void main() {
 	while (1) {
 		
 		do {
-			if (usb_live)	tmp = VCP_read(&rxBuf[read], sizeof(rxBuf) - read);
-			else 			tmp = Protocol_Read(&rxBuf[read], sizeof(rxBuf) - read);
+			if (usb_live)
+				tmp = VCP_read(&rxBuf[read], sizeof(rxBuf) - read);
+			else
+				tmp = Protocol_Read(&rxBuf[read], sizeof(rxBuf) - read);
 	
-			if (tmp > 0) {
-				HAL_Delay(1);
-				read += tmp;
-			}
+			read += tmp;		
 		} while (tmp);
 		
 		if (read == 2) {	// 2 = size of parsed packet sent from PLC (PLC sends more data which is parsed by protocol_read)

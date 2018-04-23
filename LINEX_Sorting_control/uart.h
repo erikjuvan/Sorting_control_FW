@@ -25,8 +25,7 @@
 #define USARTx_IRQHandler                USART3_IRQHandler
 
 void UART_Init();
-int UART_Read(uint8_t* data, int max_len);
 int UART_Write(uint8_t* data, int size);
-int UART_BytesToRead();
+void UART_Set_Address(uint8_t addr);
 
-void UART_Char_Match_Callback(uint8_t* data, int size);
+void UART_RX_Complete_Callback(uint8_t* data, int size);

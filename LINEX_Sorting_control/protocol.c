@@ -2,11 +2,23 @@
 #include "uart.h"
 #include <string.h>
 
-uint8_t	Device_Address = 0;
+extern uint8_t Device_Address;
 
-static void ReceivePacket(uint8_t* data, int size) {
-	for (int i = 0, i < size; ++i) {
-		uint8_t tmp_data = data[i];
+static uint8_t rx_buffer[1024];
+static uint16_t rx_buffer_size;
+
+void UART_RX_Complete_Callback(uint8_t* data, int size) {
+	rx_buffer_size = size > sizeof(rx_buffer) ? sizeof(rx_buffer) : size;
+	memcpy(rx_buffer, data, rx_buffer_size);	
+}
+
+int Protocol_Read(uint8_t* data, int max_len) {
+	
+	if (rx_buffer_size <= 0) return 0;
+	
+	int byte_cnt = 0;
+	for (int i = 0; i < rx_buffer_size; ++i) {
+		uint8_t tmp_data = rx_buffer[i];
 		
 		if ((tmp_data & 0x30) == 0x30) { // Data
 			if (byte_cnt % 2 == 0)
@@ -22,20 +34,13 @@ static void ReceivePacket(uint8_t* data, int size) {
 			}
 		}
 	}
-}
-
-void UART_Char_Match_Callback(uint8_t* data, int size) {
-	uint8_t buf[100];
 	
-	memcpy(buf, data, size > sizeof(buf) ? sizeof(buf) : size);
+	rx_buffer_size = 0;
 	
-	uint8_t addr = 0x80 | Device_Address;
-	for (int i = 0; i < size; ++i) {
-		uint8_t tmp_data = data[i];
-		if (tmp_data == addr || tmp_data == (0x80 | BROADCAST_ADDRESS)) {
-			ReceivePacket(&data[i], size - i);
-		}
-	}		
+	if (byte_cnt % 2)
+		return -1;
+	else	
+		return byte_cnt / 2;
 }
 
 int Protocol_Write(uint8_t* data, int size) {
