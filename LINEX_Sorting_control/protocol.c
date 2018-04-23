@@ -1,51 +1,41 @@
 #include "protocol.h"
 #include "uart.h"
+#include <string.h>
 
-int8_t	Device_Address = 0;
+uint8_t	Device_Address = 0;
 
-int Protocol_Read(uint8_t* data, int max_len) {
-	int read = 0, tmp = 0, byte_cnt = 0;
-	uint8_t buf[UART_BUFFER_SIZE];
-	
-	do {
-		tmp = UART_Read(&buf[read], UART_BUFFER_SIZE - read);
-		if (tmp > 0) {
-			HAL_Delay(1);
-			read += tmp;
-		}
-	} while (tmp);
-	
-	for (int i = 0, data_for_me = 0; i < read; ++i) {
-		uint8_t tmp_data = buf[i];
+static void ReceivePacket(uint8_t* data, int size) {
+	for (int i = 0, i < size; ++i) {
+		uint8_t tmp_data = data[i];
 		
-		if (tmp_data & 0x80) {	// address byte
-			if (((tmp_data & 0x7F) == Device_Address) || ((tmp_data & 0x7F) == BROADCAST_ADDRESS)) {
-				data_for_me = 1;
-				byte_cnt = 0;
-			} else {
-				data_for_me = 0;
+		if ((tmp_data & 0x30) == 0x30) { // Data
+			if (byte_cnt % 2 == 0)
+				data[byte_cnt / 2] = (tmp_data & 0x0F) << 4;
+			else 
+				data[byte_cnt / 2] |= tmp_data & 0x0F;
+			byte_cnt++;
+			if ((byte_cnt / 2) >= max_len) { // input data buffer full
+				break;
 			}
-		} else if (data_for_me) {
-			if ((tmp_data & 0x30) == 0x30) { // Data
-				if (byte_cnt % 2 == 0)
-					data[byte_cnt / 2] = (tmp_data & 0x0F) << 4;
-				else 
-					data[byte_cnt / 2] |= tmp_data & 0x0F;
-				byte_cnt++;
-				if ((byte_cnt / 2) >= max_len) { // input data buffer full
-					break;
-				}
-			} else if ((tmp_data & 0x10) == 0x10) {	// Command
-				if (tmp_data == 0x1B) {	// Escape
-				}
+		} else if ((tmp_data & 0x10) == 0x10) {	// Command
+			if (tmp_data == 0x1B) {	// Escape
 			}
 		}
 	}
+}
+
+void UART_Char_Match_Callback(uint8_t* data, int size) {
+	uint8_t buf[100];
 	
-	if (byte_cnt % 2)
-		return -1;
-	else	
-		return byte_cnt / 2;
+	memcpy(buf, data, size > sizeof(buf) ? sizeof(buf) : size);
+	
+	uint8_t addr = 0x80 | Device_Address;
+	for (int i = 0; i < size; ++i) {
+		uint8_t tmp_data = data[i];
+		if (tmp_data == addr || tmp_data == (0x80 | BROADCAST_ADDRESS)) {
+			ReceivePacket(&data[i], size - i);
+		}
+	}		
 }
 
 int Protocol_Write(uint8_t* data, int size) {

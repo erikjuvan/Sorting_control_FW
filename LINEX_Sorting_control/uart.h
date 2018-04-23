@@ -28,3 +28,5 @@ void UART_Init();
 int UART_Read(uint8_t* data, int max_len);
 int UART_Write(uint8_t* data, int size);
 int UART_BytesToRead();
+
+void UART_Char_Match_Callback(uint8_t* data, int size);

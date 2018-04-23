@@ -14,6 +14,9 @@ static struct {
 	int		i, size;
 } uart_tx_buffer;
 
+__weak void UART_Char_Match_Callback(uint8_t* data, int size) {	
+}
+
 void USARTx_IRQHandler() {
 	uint32_t isrflags = USARTx->ISR;
 	uint32_t cr1its = USARTx->CR1;
@@ -24,6 +27,12 @@ void USARTx_IRQHandler() {
 		} else {
 			uart_rx_buffer.overflow = 1;
 		}
+	}
+	
+	if ((isrflags & USART_ISR_CMF) && (cr1its & USART_CR1_CMIE)) {	// Character match
+		USARTx->ICR = USART_ICR_CMCF;	// Clear flag
+		UART_Char_Match_Callback(uart_rx_buffer.data, uart_rx_buffer.i);
+		uart_rx_buffer.i = 0;
 	}
 
 	if ((isrflags & USART_ISR_TXE) && (cr1its & USART_CR1_TXEIE)) {
@@ -68,6 +77,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
 	HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);		
 }
 
+static void SetCharacterMatchInterrupt(uint8_t ch) {
+	USARTx->CR1 |= USART_CR1_CMIE;
+	USARTx->CR2 |= ((uint32_t)ch << USART_CR2_ADD_Pos);
+}
+
 void UART_Init() {
 	UartHandle.Instance        = USARTx;
 
@@ -77,7 +91,7 @@ void UART_Init() {
 	UartHandle.Init.Parity     = UART_PARITY_NONE;
 	UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
 	UartHandle.Init.Mode       = UART_MODE_TX_RX;
-	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;
+	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;		
 	
 	HAL_UART_Init(&UartHandle);	
 	
@@ -85,6 +99,8 @@ void UART_Init() {
 	HAL_NVIC_EnableIRQ(USARTx_IRQn);
 	
 	USARTx->CR1 |= USART_CR1_RXNEIE;
+	
+	SetCharacterMatchInterrupt(0x3A);	// 0x30(our protocol) + 0x0A (newline) = 0x3A
 }
 
 int UART_CheckAndClearOverflow() {
@@ -95,20 +111,6 @@ int UART_CheckAndClearOverflow() {
 
 int UART_BytesToRead() {
 	return uart_rx_buffer.i;
-}
-
-int UART_Read(uint8_t* data, int max_len) {
-	if (uart_rx_buffer.i <= 0) {
-		return 0;
-	} else {	// There is data
-		USARTx->CR1 &= ~USART_CR1_RXNEIE;
-		int len = uart_rx_buffer.i > max_len ? max_len : uart_rx_buffer.i;
-	
-		memcpy(data, uart_rx_buffer.data, len);
-		uart_rx_buffer.i = 0;
-		USARTx->CR1 |= USART_CR1_RXNEIE;
-		return len;
-	}
 }
 
 int UART_Write(uint8_t* data, int size) {
