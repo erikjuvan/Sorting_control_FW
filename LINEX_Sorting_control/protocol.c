@@ -1,6 +1,8 @@
 #include "protocol.h"
 #include "uart.h"
 
+int8_t	Device_Address = 0;
+
 int Protocol_Read(uint8_t* data, int max_len) {
 	int read = 0, tmp = 0, byte_cnt = 0;
 	uint8_t buf[UART_BUFFER_SIZE];
@@ -17,7 +19,7 @@ int Protocol_Read(uint8_t* data, int max_len) {
 		uint8_t tmp_data = buf[i];
 		
 		if (tmp_data & 0x80) {	// address byte
-			if ((tmp_data & 0x7F) == UART_DEVICE_ADDRESS) {
+			if (((tmp_data & 0x7F) == Device_Address) || ((tmp_data & 0x7F) == BROADCAST_ADDRESS)) {
 				data_for_me = 1;
 				byte_cnt = 0;
 			} else {
@@ -53,7 +55,7 @@ int Protocol_Write(uint8_t* data, int size) {
 	if (packet_size > UART_BUFFER_SIZE)
 		return 0;
 	
-	buf[0] = 0x80 | UART_DEVICE_ADDRESS;	// add origin address byte
+	buf[0] = 0x80 | Device_Address;	// add origin address byte
 	for (int i = 0; i < size; ++i) {
 		uint8_t tmp_data = data[i];
 		buf[1 + i*2] = 0x30 | (tmp_data >> 4);

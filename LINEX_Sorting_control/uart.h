@@ -2,8 +2,6 @@
 
 #include "stm32f7xx_hal.h"
 
-#define UART_DEVICE_ADDRESS	1
-
 #define UART_BUFFER_SIZE	1024
 
 #define USARTx                           USART3

@@ -152,7 +152,7 @@ __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 		
 		if (duration_timer[i] >= 0) {			
 			if (duration_timer[i]-- == 0) {
-				GPIOE->BSRR = GPIO_Pins[i] << 16;				
+				GPIOE->BSRR = GPIO_Pins[i] << 16;
 			}
 		}
 	}		
@@ -559,79 +559,54 @@ static void Init() {
 		
 	UART_Init();
 	
+	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
+	
 #ifdef STOPWATCH
 	EnableCC();	  
 #endif
 
 }
 
-
-static int Interpreter_Write(uint8_t* data, int size) {
+void main() {
+	uint8_t rxBuf[1024] = {0};
+	uint8_t txBuf[10] = {0};
+	int tmp = 0, read = 0;
 	
-	Protocol_Write(data, size);
-	
-	return 1;
-}
-
-static int Interpreter_Read() {
-	const int Size_of_buf = 100;
-	uint8_t uart_rx_buf[Size_of_buf];
-	uint8_t uart_tx_buf[Size_of_buf];
-	int read = 0, tmp = 0;
-	
-	do {
-		tmp = Protocol_Read(&uart_rx_buf[read], Size_of_buf - read);
-		if (tmp > 0) {
-			HAL_Delay(1);
-			read += tmp;
-		}
-	} while (tmp);	
-	
-	if (read == 2) {	// 2 = size of parsed packet sent from PLC (PLC sends more data which is parsed by protocol_read)
-		
-		trigger_output = ((uint16_t)uart_rx_buf[0] << 8) | uart_rx_buf[1];
-		
-		__disable_irq();
-		uint16_t det_obj = detected_objects;
-		detected_objects = 0;
-		__enable_irq();
-		
-		uart_tx_buf[0] = (det_obj >> 8) & 0xFF;
-		uart_tx_buf[1] = det_obj & 0xFF;
-		Interpreter_Write(uart_tx_buf, 2);
-		
-		return 1;
-	} else if (read > 2) {	// we received a command. This is temporary since we want to have a state machine, but for testing this will do
-		ParseCMD(uart_rx_buf, read);	
-	}
-	
-	return 0;
-}
-
-
-int main() {				
 	Init();
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);					
-	
-	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
-	
-	uint8_t rxBuf[100] = { 0 };
-	while (1) {
-
-		if (usb_live) {
-			int read = VCP_read(rxBuf, sizeof(rxBuf));	
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);							
 		
-			if (read > 0) {	
-				ParseCMD(rxBuf, read);
-				memset(rxBuf, 0, sizeof(rxBuf));
+	while (1) {
+		
+		do {
+			if (usb_live)	tmp = VCP_read(&rxBuf[read], sizeof(rxBuf) - read);
+			else 			tmp = Protocol_Read(&rxBuf[read], sizeof(rxBuf) - read);
+	
+			if (tmp > 0) {
+				HAL_Delay(1);
+				read += tmp;
 			}
+		} while (tmp);
+		
+		if (read == 2) {	// 2 = size of parsed packet sent from PLC (PLC sends more data which is parsed by protocol_read)
+		
+			trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
+		
+			__disable_irq();
+			uint16_t det_obj = detected_objects;
+			detected_objects = 0;
+			__enable_irq();
+		
+			txBuf[0] = (det_obj >> 8) & 0xFF;
+			txBuf[1] = det_obj & 0xFF;
+			Protocol_Write(txBuf, 2);
 
-			if (writeToPC) {
-				VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
-				writeToPC = 0;
-			}
-		} else {
-			Interpreter_Read();
+		} else if (read > 2) {	// we received a command. This is temporary since we want to have a state machine, but for testing this will do
+			ParseCMD(rxBuf, read);	
+		}
+		
+		if (writeToPC && usb_live) {
+			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
+			writeToPC = 0;
 		}
 		
 	}
