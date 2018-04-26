@@ -41,9 +41,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="LINEX_Sorting_control.c">
-      <Filter>Source files</Filter>
-    </ClCompile>
     <ClCompile Include="usbd_cdc_if.c">
       <Filter>Source files</Filter>
     </ClCompile>
@@ -689,7 +686,13 @@
     <ClCompile Include="system_stm32f7xx.c">
       <Filter>Source files</Filter>
     </ClCompile>
-    <ClCompile Include="protocol.c">
+    <ClCompile Include="main.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="communication.c">
+      <Filter>Source files</Filter>
+    </ClCompile>
+    <ClCompile Include="parse.c">
       <Filter>Source files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -709,7 +712,13 @@
     <ClInclude Include="stm32f7xx_hal_conf.h">
       <Filter>Header files</Filter>
     </ClInclude>
-    <ClInclude Include="protocol.h">
+    <ClInclude Include="communication.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h">
+      <Filter>Header files</Filter>
+    </ClInclude>
+    <ClInclude Include="parse.h">
       <Filter>Header files</Filter>
     </ClInclude>
   </ItemGroup>

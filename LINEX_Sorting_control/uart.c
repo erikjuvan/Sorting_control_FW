@@ -1,10 +1,10 @@
 #include <string.h>
 #include "uart.h"
 
-const uint8_t CharacterMatch = 0x3A;
+const static uint8_t CharacterMatch = 0x0A;	// Newline
 static UART_HandleTypeDef UartHandle;
 
-uint8_t	Device_Address = 0;
+uint8_t	UART_Address = 0;
 
 static struct {
 	uint8_t data[UART_BUFFER_SIZE];
@@ -24,9 +24,10 @@ void USARTx_IRQHandler() {
 		uint8_t rx_byte = USARTx->RDR;
 		if (rx_byte == CharacterMatch) {
 			HAL_MultiProcessor_EnterMuteMode(&UartHandle);
+			uart_rx_buffer.data[uart_rx_buffer.i] = 0;
 			UART_RX_Complete_Callback(uart_rx_buffer.data, uart_rx_buffer.i);
 			uart_rx_buffer.i = 0;
-		} else if (uart_rx_buffer.i < UART_BUFFER_SIZE) {
+		} else if (uart_rx_buffer.i < UART_BUFFER_SIZE-1) { // -1 to fit terminating zero
 			uart_rx_buffer.data[uart_rx_buffer.i++] = rx_byte;
 		}
 	}
@@ -75,8 +76,8 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
 
 void UART_Set_Address(uint8_t addr) {
 	if (addr <= 127) {
-		Device_Address = addr;
-		MODIFY_REG(USARTx->CR2, USART_CR2_ADD, ((uint32_t)Device_Address << UART_CR2_ADDRESS_LSB_POS));
+		UART_Address = addr;
+		MODIFY_REG(USARTx->CR2, USART_CR2_ADD, ((uint32_t)UART_Address << UART_CR2_ADDRESS_LSB_POS));
 	}	
 }
 
@@ -91,7 +92,7 @@ void UART_Init() {
 	UartHandle.Init.Mode       = UART_MODE_TX_RX;
 	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;		
 	
-	HAL_MultiProcessor_Init(&UartHandle, Device_Address, UART_WAKEUPMETHOD_ADDRESSMARK);
+	HAL_MultiProcessor_Init(&UartHandle, UART_Address, UART_WAKEUPMETHOD_ADDRESSMARK);
 	HAL_MultiProcessor_EnableMuteMode(&UartHandle);
 	HAL_MultiProcessor_EnterMuteMode(&UartHandle);
 	
@@ -101,7 +102,7 @@ void UART_Init() {
 	USARTx->CR1 |= USART_CR1_RXNEIE;		
 }
 
-int UART_Write(uint8_t* data, int size) {
+int UART_Write(const uint8_t* data, int size) {
 	int ret = 0;
 	
 	if (size > 0 && !(USARTx->CR1 & USART_CR1_TXEIE)) {
@@ -117,7 +118,7 @@ int UART_Write(uint8_t* data, int size) {
 
 
 // Weak callback functions - to be implemented by the user in protocol specific section
-__weak void UART_RX_Complete_Callback(uint8_t* data, int size) {
+__weak void UART_RX_Complete_Callback(const uint8_t* data, int size) {
 	UNUSED(data);
 	UNUSED(size);
 }

@@ -72,9 +72,10 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="LINEX_Sorting_control.c" />
+    <ClCompile Include="main.c" />
     <ClCompile Include="misc.c" />
-    <ClCompile Include="protocol.c" />
+    <ClCompile Include="communication.c" />
+    <ClCompile Include="parse.c" />
     <ClCompile Include="system_stm32f7xx.c" />
     <ClCompile Include="uart.c" />
     <ClCompile Include="usbd_cdc_if.c" />
@@ -291,7 +292,9 @@
     <ClInclude Include="$(BSP_ROOT)\STM32F7xxxx\CMSIS_HAL\RTOS\Template\cmsis_os.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="protocol.h" />
+    <ClInclude Include="communication.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="parse.h" />
     <ClInclude Include="stm32f7xx_hal_conf.h" />
     <ClInclude Include="uart.h" />
     <ClInclude Include="usbd_cdc_if.h" />

@@ -2,7 +2,7 @@
 
 #include "stm32f7xx_hal.h"
 
-#define UART_BUFFER_SIZE	1024
+#define UART_BUFFER_SIZE	512
 
 #define USARTx                           USART3
 #define USARTx_CLK_ENABLE()              __HAL_RCC_USART3_CLK_ENABLE();
@@ -25,7 +25,7 @@
 #define USARTx_IRQHandler                USART3_IRQHandler
 
 void UART_Init();
-int UART_Write(uint8_t* data, int size);
+int  UART_Write(const uint8_t* data, int size);
 void UART_Set_Address(uint8_t addr);
 
-void UART_RX_Complete_Callback(uint8_t* data, int size);
+void UART_RX_Complete_Callback(const uint8_t* data, int size);

@@ -7,8 +7,10 @@
 #include <string.h>
 #include <math.h>
 
+#include "main.h"
 #include "uart.h"
-#include "protocol.h"
+#include "communication.h"
+#include "parse.h"
 
 USBD_HandleTypeDef USBD_Device;
 void SysTick_Handler(void);
@@ -31,9 +33,6 @@ extern char g_VCPInitialized;
 #define TIMx_CLK_ENALBE		__TIM1_CLK_ENABLE
 #define TIMx_IRQ_Handler	TIM1_IRQHandler
 
-#define	N_CHANNELS		8
-#define	BUFFER_SIZE		2
-
 //#define	DEBUG_TIM
 //#define	STOPWATCH
 
@@ -43,6 +42,7 @@ void Filter(float* x);
 ADC_HandleTypeDef	ADC1_Handle;
 DMA_HandleTypeDef	DMA2_Handle;
 
+#define		BUFFER_SIZE		2
 uint32_t	Buffer[BUFFER_SIZE][N_CHANNELS] = { 0 };
 
 #define		SEND_BUFFER_SIZE (N_CHANNELS * 100)
@@ -60,15 +60,15 @@ uint32_t T_blind = 1000;
 int skip_2nd = 0;
 int skip_2nd_cntr[N_CHANNELS] = {0};
 
-struct {
-	int timer_period;	// us
-} g_parameters = {.timer_period = 1000};
+struct SystemParameters systemParameters = {
+		.timer_period = 1000,
+		.verbose_level = 0
+	};
 
 int32_t duration_timer[N_CHANNELS] = {0};
 int32_t delay_timer[N_CHANNELS] = {0};
 uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
-typedef enum {RAW, TRAINED, FILTERED} DisplayData;
 DisplayData display_data = RAW; 
 uint8_t writeToPC = 0;
 
@@ -76,9 +76,9 @@ uint16_t trigger_output = 0;
 uint16_t detected_objects = 0;
 
 int training = 0;
-float trained_coeffs[N_CHANNELS] = {1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0};
+float trained_coeffs[N_CHANNELS];
 
-int usb_live = 0;
+int protocol_ascii = 1;
 
 // IRQ
 /////////////////////////////////////
@@ -349,7 +349,7 @@ void GPIO_Configure() {
 }
 
 void ChangeSampleFrequency() {
-	TIMx->ARR = g_parameters.timer_period;
+	TIMx->ARR = systemParameters.timer_period;
 	TIMx->EGR = TIM_EGR_UG;		
 }
 
@@ -392,80 +392,6 @@ static void Train() {
 	HAL_ADC_Stop(&ADC1_Handle);
 	ADC_Configure();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
-}
-
-int ParseCMD(uint8_t *buf, int len) {
-	uint8_t *pt = NULL;
-	
-	pt = (uint8_t *)strtok((char*)buf, ",");
-	
-	// "CSETF,1000" - 1000 is in hertz
-	if (strncmp((char *)pt, "CSETF", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
-		int val = atoi((char*)pt);		
-		if (val > 0) {
-			g_parameters.timer_period = 1e6 / val;	// convert val which are hertz to period which is in us 
-			ChangeSampleFrequency();
-			return 0;	
-		}
-		else {
-			return 1;
-		}
-	} 
-	
-	else if (strncmp((char *)pt, "CRESET", strlen((char*)pt)) == 0) {
-		
-	}
-	
-	else if (strncmp((char *)pt, "CTRAIN", strlen((char*)pt)) == 0) {		
-		//Train();
-		training = 1000;
-	} 
-	
-	else if (strncmp((char *)pt, "CRAW", strlen((char*)pt)) == 0) {
-		display_data = RAW;
-	}
-	
-	else if (strncmp((char *)pt, "CTRAINED", strlen((char*)pt)) == 0) {
-		display_data = TRAINED;
-	} 
-	
-	else if (strncmp((char *)pt, "CFILTERED", strlen((char*)pt)) == 0) {
-		display_data = FILTERED;
-	} 
-	
-	else if (strncmp((char *)pt, "CPARAMS", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
-		A1 = atof((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ",");
-		A2 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
-		A4 = atof((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
-		FTR_THRSHLD = atof((char*)pt);
-	}
-	
-	else if (strncmp((char *)pt, "CTIMES", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
-		T_delay = atoi((char*)pt);		
-		pt = (uint8_t *)strtok(NULL, ",");
-		T_duration = atoi((char*)pt);	
-		pt = (uint8_t *)strtok(NULL, ",");
-		T_blind = atoi((char*)pt);	
-	}
-	
-	else if (strncmp((char *)pt, "CSKIPSCND", strlen((char*)pt)) == 0) {
-		pt = (uint8_t *)strtok(NULL, ",");
-		if (atoi((char*)pt) == 1) {
-			skip_2nd = 1;
-			for (int i = 0; i < N_CHANNELS; ++i)
-				skip_2nd_cntr[i] = 0;
-		} else {
-			skip_2nd = 0;
-		}
-	}
-	
-	return 1;
 }
 
 __attribute__((optimize("O2"))) void AddValues(float* x) {	
@@ -537,21 +463,16 @@ static void USB_Init() {
 	// Wait for USB to Initialize
 	while (USBD_Device.pClassData == 0) {
 	}
-	
-	usb_live = 1;
 }
 
 static void USB_Deinit() {
 	USBD_Stop(&USBD_Device);
-	USBD_DeInit(&USBD_Device);
-	
-	usb_live = 0;
+	USBD_DeInit(&USBD_Device);	
 }
 
 static void Init() {
 	HAL_Init();	
 	SystemClock_Config();
-	//USB_Init();	// enable it with UART if neccessary
 	GPIO_Configure();
 	ADC_Configure();
 	DMA_Configure();
@@ -565,49 +486,53 @@ static void Init() {
 	EnableCC();	  
 #endif
 
+	// Set all coeffs to 1.0 (untrained)
+	for (int i = 0; i < N_CHANNELS; ++i) trained_coeffs[i] = 1.0;
 }
 
 int main() {
-	uint8_t rxBuf[1024] = {0};
-	uint8_t txBuf[10] = {0};
+	uint8_t rxBuf[UART_BUFFER_SIZE] = {0};
+	uint8_t txBuf[16] = {0};
 	int tmp = 0, read = 0;
 	
 	Init();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);							
 		
-	while (1) {
-		
-		do {
-			if (usb_live)
-				tmp = VCP_read(&rxBuf[read], sizeof(rxBuf) - read);
-			else
-				tmp = Protocol_Read(&rxBuf[read], sizeof(rxBuf) - read);
+	USB_Init();
+	Communication_Set_USB();
+	protocol_ascii = 1;
 	
-			read += tmp;		
-		} while (tmp);
+	while (1) {
+				
+		read = Read(rxBuf, sizeof(rxBuf), protocol_ascii);
 		
-		if (read == 2) {	// 2 = size of parsed packet sent from PLC (PLC sends more data which is parsed by protocol_read)
+		if (read > 0) {
+			if (protocol_ascii) {	// ASCII
+				Parse((char*)rxBuf);
+				memset(rxBuf, 0, read);
+				read = 0;
+			} else {	// Binary
+				if (read == -1) { // Escape from Bin mode
+					protocol_ascii = 1;
+				} else if (read > 0) {
+					trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
 		
-			trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
+					__disable_irq();
+					uint16_t det_obj = detected_objects;
+					detected_objects = 0;
+					__enable_irq();
 		
-			__disable_irq();
-			uint16_t det_obj = detected_objects;
-			detected_objects = 0;
-			__enable_irq();
+					txBuf[0] = (det_obj >> 8) & 0xFF;
+					txBuf[1] = det_obj & 0xFF;
+					Write(txBuf, 2, 0);
+				}								
+			}						
+		}	
 		
-			txBuf[0] = (det_obj >> 8) & 0xFF;
-			txBuf[1] = det_obj & 0xFF;
-			Protocol_Write(txBuf, 2);
-
-		} else if (read > 2) {	// we received a command. This is temporary since we want to have a state machine, but for testing this will do
-			ParseCMD(rxBuf, read);	
-		}
-		
-		if (writeToPC && usb_live) {
+		if (writeToPC && Communication_Get_USB() && systemParameters.verbose_level > 0) {
 			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
 			writeToPC = 0;
 		}
-		
 	}
 }
 
