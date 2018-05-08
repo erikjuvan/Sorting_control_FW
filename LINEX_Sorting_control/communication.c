@@ -10,6 +10,8 @@ extern uint8_t UART_Address;
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
 static uint16_t rx_buffer_size;
 
+extern const uint8_t CharacterMatch;
+
 static int usb = 0;
 
 void UART_RX_Complete_Callback(const uint8_t* data, int size) {
@@ -39,9 +41,6 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 				return len;
 			} else { // Binary mode
 				uint8_t* u8_data = buffer;
-				if (len % 2 != 0) {	// invalid number of bytes
-					return 0;		
-				}
 		
 				for (int i = 0; i < len; ++i) {
 					uint8_t rx_byte = rx_buffer[i];
@@ -49,7 +48,7 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 						if (i % 2 == 0) u8_data[i/2] = (rx_byte & 0x0F) << 4;
 						else u8_data[i/2] |= (rx_byte & 0x0F);
 					} else if (rx_byte == 0x1B) { // Escape
-						return -1;			
+						return -1;
 					}
 				}
 				return len / 2;
@@ -71,16 +70,17 @@ int Write(const uint8_t* buffer, int size, int ascii) {
 		len = VCP_write(buffer, size);
 	} else {
 		if (ascii) {
-			int packet_size = 1 + size; // 1 - address byte
+			int packet_size = 1 + size + 1; // 1 - address byte, + size - payload, + 1 - terminating character
 			
 			if (packet_size > UART_BUFFER_SIZE)
 				return 0;
 			
 			buf[0] = 0x80 | UART_Address;	// add origin address byte
 			memcpy(&buf[1], buffer, size);
+			buf[packet_size-1] = CharacterMatch;	// add terminating character
 			len = UART_Write(buf, packet_size);
 		} else {
-			int packet_size = 1 + size * 2; // 1 - address byte, *2 - each byte is split into 2 send bytes
+			int packet_size = 1 + size * 2 + 1; // 1 - address byte, size*2 - payload (each byte is split into 2 send bytes), + 1 - terminating character
 	
 			if (packet_size > UART_BUFFER_SIZE)
 				return 0;
@@ -92,6 +92,7 @@ int Write(const uint8_t* buffer, int size, int ascii) {
 				buf[2 + i*2] = 0x30 | (tmp_data & 0x0F);
 			}
 			
+			buf[packet_size-1] = CharacterMatch;	// add terminating character
 			len = UART_Write(buf, packet_size);
 		}
 	}

@@ -1,7 +1,7 @@
 #include <string.h>
 #include "uart.h"
 
-const static uint8_t CharacterMatch = 0x0A;	// Newline
+const uint8_t CharacterMatch = 0x0A;	// Newline
 static UART_HandleTypeDef UartHandle;
 
 uint8_t	UART_Address = 0;
@@ -27,7 +27,7 @@ void USARTx_IRQHandler() {
 			uart_rx_buffer.data[uart_rx_buffer.i] = 0;
 			UART_RX_Complete_Callback(uart_rx_buffer.data, uart_rx_buffer.i);
 			uart_rx_buffer.i = 0;
-		} else if (uart_rx_buffer.i < UART_BUFFER_SIZE-1) { // -1 to fit terminating zero
+		} else if (uart_rx_buffer.i < UART_BUFFER_SIZE-1 && rx_byte < 0x80) { // -1 to fit terminating zero, rx_byte < 0x80 don't copy the address byte
 			uart_rx_buffer.data[uart_rx_buffer.i++] = rx_byte;
 		}
 	}
@@ -76,8 +76,13 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
 
 void UART_Set_Address(uint8_t addr) {
 	if (addr <= 127) {
-		UART_Address = addr;
-		MODIFY_REG(USARTx->CR2, USART_CR2_ADD, ((uint32_t)UART_Address << UART_CR2_ADDRESS_LSB_POS));
+		USARTx->CR1 &= ~USART_CR1_UE;
+		MODIFY_REG(USARTx->CR2, USART_CR2_ADD, ((uint32_t)addr << UART_CR2_ADDRESS_LSB_POS));
+		USARTx->CR1 |= USART_CR1_UE;
+		
+		if (addr == ((USARTx->CR2 & USART_CR2_ADD_Msk) >> UART_CR2_ADDRESS_LSB_POS)) {
+			UART_Address = addr;
+		}				
 	}	
 }
 

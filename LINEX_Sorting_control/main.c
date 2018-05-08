@@ -496,8 +496,8 @@ int main() {
 	int tmp = 0, read = 0;
 	
 	Init();
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);							
-		
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+
 	USB_Init();
 	Communication_Set_USB();
 	protocol_ascii = 1;
@@ -506,7 +506,7 @@ int main() {
 				
 		read = Read(rxBuf, sizeof(rxBuf), protocol_ascii);
 		
-		if (read > 0) {
+		if (read != 0) {
 			if (protocol_ascii) {	// ASCII
 				Parse((char*)rxBuf);
 				memset(rxBuf, 0, read);
