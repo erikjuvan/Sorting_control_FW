@@ -1,5 +1,6 @@
 #include <string.h>
 #include "uart.h"
+#include "flash.h"
 
 const uint8_t CharacterMatch = 0x0A;	// Newline
 static UART_HandleTypeDef UartHandle;
@@ -82,6 +83,7 @@ void UART_Set_Address(uint8_t addr) {
 		
 		if (addr == ((USARTx->CR2 & USART_CR2_ADD_Msk) >> UART_CR2_ADDRESS_LSB_POS)) {
 			UART_Address = addr;
+			FLASH_WriteID(UART_Address);			
 		}				
 	}	
 }
@@ -96,6 +98,9 @@ void UART_Init() {
 	UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
 	UartHandle.Init.Mode       = UART_MODE_TX_RX;
 	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;		
+	
+	uint8_t id = FLASH_ReadID();
+	if (id < 128) UART_Address = id;
 	
 	HAL_MultiProcessor_Init(&UartHandle, UART_Address, UART_WAKEUPMETHOD_ADDRESSMARK);
 	HAL_MultiProcessor_EnableMuteMode(&UartHandle);
