@@ -41,19 +41,16 @@ void USARTx_IRQHandler() {
 }
 
 void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
-	GPIO_InitTypeDef  GPIO_InitStruct;
-
-	RCC_PeriphCLKInitTypeDef RCC_PeriphClkInit;
+	GPIO_InitTypeDef  GPIO_InitStruct;	
 
 	/*##-1- Enable peripherals and GPIO Clocks #################################*/
 	/* Enable GPIO TX/RX clock */
 	USARTx_TX_GPIO_CLK_ENABLE();
 	USARTx_RX_GPIO_CLK_ENABLE();
+	USARTx_DE_GPIO_CLK_ENABLE();
 
-	/* Select SysClk as source of USART1 clocks */
-	RCC_PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
-	RCC_PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_SYSCLK;
-	HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphClkInit);
+	/* Select SysClk as source of USART clocks */
+	USARTx_RCC_PERIPHCLKINIT();
 
 	/* Enable USARTx clock */
 	USARTx_CLK_ENABLE();
@@ -72,7 +69,16 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart) {
 	GPIO_InitStruct.Pin = USARTx_RX_PIN;
 	GPIO_InitStruct.Alternate = USARTx_RX_AF;
 
-	HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);		
+	HAL_GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStruct);
+	
+	// UART DE (Driver enable for RS-422) GPIO pin configuration
+	GPIO_InitStruct.Pin			= USARTx_DE_PIN;
+	GPIO_InitStruct.Mode		= GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull		= GPIO_NOPULL;
+	GPIO_InitStruct.Speed		= GPIO_SPEED_FREQ_MEDIUM;
+	GPIO_InitStruct.Alternate	= USARTx_DE_AF;
+	
+	HAL_GPIO_Init(USARTx_DE_GPIO_PORT, &GPIO_InitStruct);
 }
 
 void UART_Set_Address(uint8_t addr) {
@@ -97,11 +103,12 @@ void UART_Init() {
 	UartHandle.Init.Parity     = UART_PARITY_NONE;
 	UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
 	UartHandle.Init.Mode       = UART_MODE_TX_RX;
-	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;		
+	UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;
 	
 	uint8_t id = FLASH_ReadID();
 	if (id < 128) UART_Address = id;
 	
+	HAL_RS485Ex_Init(&UartHandle, UART_DE_POLARITY_HIGH, 16, 16);	// 16 - with oversampling 16, that comes out to 1 bit delay between DE(high) -> START, and STOP -> DE(low).
 	HAL_MultiProcessor_Init(&UartHandle, UART_Address, UART_WAKEUPMETHOD_ADDRESSMARK);
 	HAL_MultiProcessor_EnableMuteMode(&UartHandle);
 	HAL_MultiProcessor_EnterMuteMode(&UartHandle);
