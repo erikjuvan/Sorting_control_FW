@@ -40,7 +40,8 @@
 	RCC_PeriphClkInit.Usart3ClockSelection = RCC_USART3CLKSOURCE_SYSCLK; \
 	HAL_RCCEx_PeriphCLKConfig(&RCC_PeriphClkInit)
 
-#else
+#else
+
 #define USARTx							USART2
 #define USARTx_CLK_ENABLE()				__HAL_RCC_USART2_CLK_ENABLE()
 #define USARTx_RCC_PERIPHCLK			RCC_PERIPHCLK_USART2

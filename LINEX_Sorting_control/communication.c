@@ -23,13 +23,12 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 	int len = 0;
 	
 	if (usb) {
+		// This silly loop with delays seems neccessary at least when using PC program terminal.exe when sending a file (not when sending normally via command line)		
 		int tmp = 0;
-		// This silly loop with delays seems neccessary at least when using PC program terminal.exe when sending a file (not when sending normally via command line)
-		do {
-			tmp = VCP_read(&buffer[len], max_size - len);
+		while ((tmp = VCP_read(&buffer[len], max_size - len)) > 0) {
 			len += tmp;
-			HAL_Delay(1);
-		} while (tmp > 0);
+			for (int i = 0; i < 100; ++i);	// improvised short Delay
+		} 
 		buffer[len] = 0;
 	} else {
 		if (rx_buffer_size > 0 && rx_buffer_size < max_size) {
@@ -40,13 +39,11 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 			if (ascii) { // ASCII mode
 				return len;
 			} else { // Binary mode
-				uint8_t* u8_data = buffer;
-		
 				for (int i = 0; i < len; ++i) {
 					uint8_t rx_byte = rx_buffer[i];
 					if ((rx_byte & 0x30) == 0x30) { // Data
-						if (i % 2 == 0) u8_data[i/2] = (rx_byte & 0x0F) << 4;
-						else u8_data[i/2] |= (rx_byte & 0x0F);
+						if (i % 2 == 0) buffer[i/2] = (rx_byte & 0x0F) << 4;
+						else buffer[i/2] |= (rx_byte & 0x0F);
 					} else if (rx_byte == 0x1B) { // Escape
 						return -1;
 					}
