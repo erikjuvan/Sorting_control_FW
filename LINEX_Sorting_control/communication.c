@@ -30,6 +30,11 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 			for (int i = 0; i < 100; ++i);	// improvised short Delay
 		} 
 		buffer[len] = 0;
+		if (!ascii) {
+			if (strncmp((const char*)buffer, "ASCII", 5) == 0) { // Escape from BIN to ASCII mode
+				return -1;
+			}
+		}
 	} else {
 		if (rx_buffer_size > 0 && rx_buffer_size < max_size) {
 			len = rx_buffer_size;

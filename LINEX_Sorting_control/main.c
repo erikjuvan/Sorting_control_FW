@@ -65,9 +65,13 @@ struct SystemParameters systemParameters = {
 		.verbose_level = 0
 	};
 
+#define VALVE_PORT	GPIOD
+#define VALVE_PINS	(GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define VALVE_CLK_ENABLE	__GPIOD_CLK_ENABLE
+uint16_t Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
+
 int32_t duration_timer[N_CHANNELS] = {0};
 int32_t delay_timer[N_CHANNELS] = {0};
-uint16_t GPIO_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
 DisplayData display_data = RAW; 
 uint8_t writeToPC = 0;
@@ -145,14 +149,14 @@ __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 	for (int i = 0; i < N_CHANNELS; ++i) {
 		if (delay_timer[i] >= 0) {			
 			if (delay_timer[i]-- == 0) {
-				GPIOE->BSRR = GPIO_Pins[i];
+				VALVE_PORT->BSRR = Valve_Pins[i];
 				duration_timer[i] = T_duration;
 			}
 		}			
 		
 		if (duration_timer[i] >= 0) {			
 			if (duration_timer[i]-- == 0) {
-				GPIOE->BSRR = GPIO_Pins[i] << 16;
+				VALVE_PORT->BSRR = Valve_Pins[i] << 16;
 			}
 		}
 	}		
@@ -339,13 +343,13 @@ void GPIO_Configure() {
 	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;	// GPIO_SPEED_FREQ_HIGH
 	HAL_GPIO_Init(IR_LED_PORT, &GPIO_InitStructure);
 	
-	// Product present
-	__GPIOD_CLK_ENABLE();
-	GPIO_InitStructure.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7;
+	// Valve GPIO
+	VALVE_CLK_ENABLE();
+	GPIO_InitStructure.Pin = VALVE_PINS;
 	GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStructure.Pull = GPIO_NOPULL;
 	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW;	// GPIO_SPEED_FREQ_HIGH
-	HAL_GPIO_Init(GPIOD, &GPIO_InitStructure);
+	HAL_GPIO_Init(VALVE_PORT, &GPIO_InitStructure);
 }
 
 void ChangeSampleFrequency() {
@@ -506,27 +510,27 @@ int main() {
 				
 		read = Read(rxBuf, sizeof(rxBuf), protocol_ascii);
 		
-		if (read != 0) {
-			if (protocol_ascii) {	// ASCII
-				Parse((char*)rxBuf);
-				memset(rxBuf, 0, read);
-				read = 0;
-			} else {	// Binary
-				if (read == -1) { // Escape from Bin mode
-					protocol_ascii = 1;
-				} else if (read > 0) {
-					trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
+		if (read > 0 && protocol_ascii ) {	// ASCII
+			Parse((char*)rxBuf);
+			memset(rxBuf, 0, read);
+		}
 		
-					__disable_irq();
-					uint16_t det_obj = detected_objects;
-					detected_objects = 0;
-					__enable_irq();
+		if (read != 0 && !protocol_ascii) { // Binary
+			if (read == -1) { // Escape from Bin mode
+				protocol_ascii = 1;
+			} else if (read > 0) {
+				trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
 		
-					txBuf[0] = (det_obj >> 8) & 0xFF;
-					txBuf[1] = det_obj & 0xFF;
+				__disable_irq();
+				uint16_t det_obj = detected_objects;
+				detected_objects = 0;
+				__enable_irq();
+		
+				txBuf[0] = (det_obj >> 8) & 0xFF;
+				txBuf[1] = det_obj & 0xFF;
+				if (!Communication_Get_USB())	// temporary hack whilst using USB for debuging 
 					Write(txBuf, 2, 0);
-				}								
-			}						
+			}													
 		}	
 		
 		if (writeToPC && Communication_Get_USB() && systemParameters.verbose_level > 0) {
