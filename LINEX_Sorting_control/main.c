@@ -70,8 +70,8 @@ struct SystemParameters systemParameters = {
 #define VALVE_CLK_ENABLE	__GPIOD_CLK_ENABLE
 uint16_t Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
-int32_t duration_timer[N_CHANNELS] = {0};
-int32_t delay_timer[N_CHANNELS] = {0};
+int32_t duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
+int32_t delay_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};	// -1 to prevent turn on at power on
 
 DisplayData display_data = RAW; 
 uint8_t writeToPC = 0;
@@ -463,10 +463,6 @@ static void USB_Init() {
 	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
 	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_LINEX_Sorting_control_fops);
 	USBD_Start(&USBD_Device);
-	
-	// Wait for USB to Initialize
-	while (USBD_Device.pClassData == 0) {
-	}
 }
 
 static void USB_Deinit() {
@@ -503,14 +499,14 @@ int main() {
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 
 	USB_Init();
-	Communication_Set_USB();
+	Communication_Set_UART();
 	protocol_ascii = 1;
 	
 	while (1) {
 				
 		read = Read(rxBuf, sizeof(rxBuf), protocol_ascii);
 		
-		if (read > 0 && protocol_ascii ) {	// ASCII
+		if (read > 0 && protocol_ascii) {	// ASCII
 			Parse((char*)rxBuf);
 			memset(rxBuf, 0, read);
 		}
@@ -520,7 +516,7 @@ int main() {
 				protocol_ascii = 1;
 			} else if (read > 0) {
 				trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
-		
+				
 				__disable_irq();
 				uint16_t det_obj = detected_objects;
 				detected_objects = 0;
@@ -536,6 +532,17 @@ int main() {
 		if (writeToPC && Communication_Get_USB() && systemParameters.verbose_level > 0) {
 			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
 			writeToPC = 0;
+		}
+		
+		// Developement code (should not be used after devel phase)
+		if (!Communication_Get_USB()) {	// if we are in UART mode
+			char buf[10];
+			if (VCP_read(buf, 10) > 0) {
+				if (strncmp(buf, "USBY", 4) == 0) {
+					Communication_Set_USB();
+					protocol_ascii = 1;
+				}
+			}
 		}
 	}
 }
