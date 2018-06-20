@@ -27,7 +27,7 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 		int tmp = 0;
 		while ((tmp = VCP_read(&buffer[len], max_size - len)) > 0) {
 			len += tmp;
-			for (int i = 0; i < 100; ++i);	// improvised short Delay
+			for (int i = 0; i < 100000; ++i);	// improvised Delay
 		} 
 		buffer[len] = 0;
 		if (!ascii) {
@@ -40,12 +40,13 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 			len = rx_buffer_size;
 			memcpy(buffer, rx_buffer, len);
 			rx_buffer_size = 0;
+			buffer[len] = 0;
 			
 			if (ascii) { // ASCII mode
 				return len;
 			} else { // Binary mode
 				for (int i = 0; i < len; ++i) {
-					uint8_t rx_byte = rx_buffer[i];
+					uint8_t rx_byte = buffer[i];
 					if ((rx_byte & 0x30) == 0x30) { // Data
 						if (i % 2 == 0) buffer[i/2] = (rx_byte & 0x0F) << 4;
 						else buffer[i/2] |= (rx_byte & 0x0F);

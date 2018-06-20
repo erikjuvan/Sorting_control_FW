@@ -141,6 +141,10 @@ static void Function_CSKIPSCND(char* str) {
 	}
 }
 
+static void Function_PING(char* str) {
+	Write((uint8_t*) "OK", 2, 1);
+}
+
 static struct {
 	const char* name;
 	void (*Func)(char*);
@@ -153,6 +157,7 @@ static struct {
 	{"IDGT", Function_IDGT},
 	{"USBY", Function_USBY},
 	{"USBN", Function_USBN},
+	{"PING", Function_PING},
 	
 	// Legacy
 	{"CSETF", Function_CSETF},	

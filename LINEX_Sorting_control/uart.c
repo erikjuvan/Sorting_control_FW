@@ -10,12 +10,12 @@ uint8_t	UART_Address = 0;
 static struct {
 	uint8_t data[UART_BUFFER_SIZE];
 	int		i;
-} uart_rx_buffer;
+} uart_rx_buffer = { .i = 0 };
 
 static struct {
 	uint8_t data[UART_BUFFER_SIZE];
 	int		i, size;
-} uart_tx_buffer;
+} uart_tx_buffer = { .i = 0, .size = 0 };
 
 void USARTx_IRQHandler() {
 	uint32_t isrflags = USARTx->ISR;
@@ -24,8 +24,7 @@ void USARTx_IRQHandler() {
 	if ((isrflags & USART_ISR_RXNE) && (cr1its & USART_CR1_RXNEIE)) {
 		uint8_t rx_byte = USARTx->RDR;
 		if (rx_byte == CharacterMatch) {
-			HAL_MultiProcessor_EnterMuteMode(&UartHandle);
-			uart_rx_buffer.data[uart_rx_buffer.i] = 0;
+			HAL_MultiProcessor_EnterMuteMode(&UartHandle);			
 			UART_RX_Complete_Callback(uart_rx_buffer.data, uart_rx_buffer.i);
 			uart_rx_buffer.i = 0;
 		} else if (uart_rx_buffer.i < UART_BUFFER_SIZE-1 && rx_byte < 0x80) { // -1 to fit terminating zero, rx_byte < 0x80 don't copy the address byte
