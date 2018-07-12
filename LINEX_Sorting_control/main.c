@@ -45,7 +45,8 @@ DMA_HandleTypeDef	DMA2_Handle;
 #define		BUFFER_SIZE		2
 uint32_t	Buffer[BUFFER_SIZE][N_CHANNELS] = { 0 };
 
-#define		SEND_BUFFER_SIZE (N_CHANNELS * 100)
+#define		DATA_PER_CHANNEL	100
+#define		SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
 uint32_t	SendBuffer_i = 0;
 float		SendBuffer[SEND_BUFFER_SIZE] = { 0 };
 
@@ -60,7 +61,7 @@ uint32_t T_blind = 1000;
 int skip_2nd = 0;
 int skip_2nd_cntr[N_CHANNELS] = {0};
 
-struct SystemParameters systemParameters = {
+struct SystemParameters g_systemParameters = {
 		.timer_period = 1000,
 		.verbose_level = 0
 	};
@@ -68,21 +69,23 @@ struct SystemParameters systemParameters = {
 #define VALVE_PORT	GPIOD
 #define VALVE_PINS	(GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
 #define VALVE_CLK_ENABLE	__GPIOD_CLK_ENABLE
-uint16_t Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
+uint16_t g_Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
-int32_t duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
-int32_t delay_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};	// -1 to prevent turn on at power on
+int32_t g_duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
+int32_t g_delay_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};	// -1 to prevent turn on at power on
 
-DisplayData display_data = RAW; 
-uint8_t writeToPC = 0;
+DisplayData g_display_data = RAW; 
+uint8_t g_writeToPC = 0;
 
-uint16_t trigger_output = 0;
-uint16_t detected_objects = 0;
+uint16_t g_trigger_output = 0;
+uint16_t g_detected_objects = 0;
 
-int training = 0;
-float trained_coeffs[N_CHANNELS];
+int g_training = 0;
+float g_trained_coeffs[N_CHANNELS];
 
-int protocol_ascii = 1;
+int g_protocol_ascii = 1;
+
+int g_add_trigger_info = 0;
 
 // IRQ
 /////////////////////////////////////
@@ -120,43 +123,43 @@ __attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
 			fBuf[i] = (float)Buffer[BUFFER_SIZE/2][i];
 	}
 	
-	if (training) {
-		training--;
+	if (g_training) {
+		g_training--;
 		const float A = 0.01;
 		for (int i = 0; i < N_CHANNELS; ++i)
-			trained_coeffs[i] = A * fBuf[i] + (1 - A) * trained_coeffs[i];
+			g_trained_coeffs[i] = A * fBuf[i] + (1 - A) * g_trained_coeffs[i];
 		
-		if (training <= 0) {
+		if (g_training <= 0) {
 			for (int i = 0; i < N_CHANNELS; ++i)
-				trained_coeffs[i] = 1000.0 / trained_coeffs[i];
+				g_trained_coeffs[i] = 1000.0 / g_trained_coeffs[i];
 		}
 	} else {
-		if (display_data == RAW) {
+		if (g_display_data == RAW) {
 			AddValues(fBuf);
-		} else if (display_data == TRAINED) {
+		} else if (g_display_data == TRAINED) {
 			for (int i = 0; i < N_CHANNELS; ++i) {
-				fBuf[i] *= trained_coeffs[i];
+				fBuf[i] *= g_trained_coeffs[i];
 			}
 			AddValues(fBuf);
-		} else if (display_data == FILTERED) {
+		} else if (g_display_data == FILTERED) {
 			for (int i = 0; i < N_CHANNELS; ++i) {
-				fBuf[i] *= trained_coeffs[i];
+				fBuf[i] *= g_trained_coeffs[i];
 			}
 			Filter(fBuf);
 		} 
 	}
 	
 	for (int i = 0; i < N_CHANNELS; ++i) {
-		if (delay_timer[i] >= 0) {			
-			if (delay_timer[i]-- == 0) {
-				VALVE_PORT->BSRR = Valve_Pins[i];
-				duration_timer[i] = T_duration;
+		if (g_delay_timer[i] >= 0) {			
+			if (g_delay_timer[i]-- == 0) {
+				VALVE_PORT->BSRR = g_Valve_Pins[i];
+				g_duration_timer[i] = T_duration;
 			}
 		}			
 		
-		if (duration_timer[i] >= 0) {			
-			if (duration_timer[i]-- == 0) {
-				VALVE_PORT->BSRR = Valve_Pins[i] << 16;
+		if (g_duration_timer[i] >= 0) {			
+			if (g_duration_timer[i]-- == 0) {
+				VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
 			}
 		}
 	}		
@@ -353,7 +356,7 @@ void GPIO_Configure() {
 }
 
 void ChangeSampleFrequency() {
-	TIMx->ARR = systemParameters.timer_period;
+	TIMx->ARR = g_systemParameters.timer_period;
 	TIMx->EGR = TIM_EGR_UG;		
 }
 
@@ -390,7 +393,7 @@ static void Train() {
 		
 		HAL_ADC_Stop(&ADC1_Handle);
 		float avg = accum / Size;
-		trained_coeffs[adc_idx] = 1000.0 / avg;
+		g_trained_coeffs[adc_idx] = 1000.0 / avg;
 	}
 	
 	HAL_ADC_Stop(&ADC1_Handle);
@@ -398,12 +401,25 @@ static void Train() {
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 }
 
-__attribute__((optimize("O2"))) void AddValues(float* x) {	
-	memcpy(&SendBuffer[SendBuffer_i], x, N_CHANNELS * sizeof(float));
-	SendBuffer_i += N_CHANNELS;
+__attribute__((optimize("O2"))) void AddValues(float* x) {
+	
+	// Add trigger info encoded inside the data (set MSB bit)
+	if (g_add_trigger_info) {
+		for (int i = 0; i < N_CHANNELS; ++i) {
+			if (g_trigger_output & (1 << i)) {
+				x[i] += 0x80000000;   	// set MSB (sign bit) bit to signal a trigger state (for PC app)
+			}
+		}
+	}
+	
+	// Organize data like so: ch1_0,ch1_1,ch1_2,...ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
+	for (int i = 0; i < N_CHANNELS; ++i) {
+		SendBuffer[i * DATA_PER_CHANNEL + SendBuffer_i] = x[i];
+	}	
+	SendBuffer_i++;
 
-	if (SendBuffer_i >= SEND_BUFFER_SIZE) {
-		writeToPC = 1;
+	if (SendBuffer_i >= DATA_PER_CHANNEL) {
+		g_writeToPC = 1;
 		SendBuffer_i = 0;
 	}
 }
@@ -415,11 +431,11 @@ __attribute__((optimize("O2"))) void ObjectDetected(int idx) {
 			set = 0;
 	}
 	
-	if (set && ((1 << idx) & trigger_output)) {
-		delay_timer[idx] = T_delay;
+	if (set && ((1 << idx) & g_trigger_output)) {
+		g_delay_timer[idx] = T_delay;
 	}
 	
-	detected_objects |= 1 << idx;
+	g_detected_objects |= 1 << idx;
 }
 
 __attribute__((optimize("O2"))) void Filter(float* x) {
@@ -487,7 +503,7 @@ static void Init() {
 #endif
 
 	// Set all coeffs to 1.0 (untrained)
-	for (int i = 0; i < N_CHANNELS; ++i) trained_coeffs[i] = 1.0;
+	for (int i = 0; i < N_CHANNELS; ++i) g_trained_coeffs[i] = 1.0;
 }
 
 int main() {
@@ -500,26 +516,26 @@ int main() {
 
 	USB_Init();
 	Communication_Set_UART();
-	protocol_ascii = 1;
+	g_protocol_ascii = 1;
 	
 	while (1) {
 				
-		read = Read(rxBuf, sizeof(rxBuf), protocol_ascii);
+		read = Read(rxBuf, sizeof(rxBuf), g_protocol_ascii);
 		
-		if (read > 0 && protocol_ascii) {	// ASCII
+		if (read > 0 && g_protocol_ascii) {	// ASCII
 			Parse((char*)rxBuf);
 			memset(rxBuf, 0, read);
 		}
 		
-		if (read != 0 && !protocol_ascii) { // Binary
+		if (read != 0 && !g_protocol_ascii) { // Binary
 			if (read == -1) { // Escape from Bin mode
-				protocol_ascii = 1;
+				g_protocol_ascii = 1;
 			} else if (read > 0) {
-				trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
+				g_trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
 				
 				__disable_irq();
-				uint16_t det_obj = detected_objects;
-				detected_objects = 0;
+				uint16_t det_obj = g_detected_objects;
+				g_detected_objects = 0;
 				__enable_irq();
 		
 				txBuf[0] = (det_obj >> 8) & 0xFF;
@@ -529,9 +545,11 @@ int main() {
 			}													
 		}	
 		
-		if (writeToPC && Communication_Get_USB() && systemParameters.verbose_level > 0) {
-			VCP_write(SendBuffer, SEND_BUFFER_SIZE * sizeof(SendBuffer[0]));
-			writeToPC = 0;
+		if (g_writeToPC && g_systemParameters.verbose_level > 0) {
+			uint32_t delim = 0xDEADBEEF;
+			VCP_write(&delim, 4);
+			VCP_write(SendBuffer, sizeof(SendBuffer));
+			g_writeToPC = 0;
 		}
 		
 		// Developement code (should not be used after devel phase)
@@ -540,7 +558,7 @@ int main() {
 			if (VCP_read(buf, 10) > 0) {
 				if (strncmp(buf, "USBY", 4) == 0) {
 					Communication_Set_USB();
-					protocol_ascii = 1;
+					g_protocol_ascii = 1;
 				}
 			}
 		}

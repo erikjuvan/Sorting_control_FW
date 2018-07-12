@@ -6,10 +6,11 @@
 #include <string.h>
 #include <stdlib.h>
 
-extern int protocol_ascii;
-extern int training;
-extern struct SystemParameters systemParameters;
-extern DisplayData display_data;
+extern int g_protocol_ascii;
+extern int g_training;
+extern int g_add_trigger_info;
+extern struct SystemParameters g_systemParameters;
+extern DisplayData g_display_data;
 
 extern float A1;
 extern float A2;
@@ -30,7 +31,7 @@ extern uint8_t UART_Address;
 const static char Delims[] = "\n\r\t, ";
 
 static void Function_STRT(char* str) {
-	protocol_ascii = 0;
+	g_protocol_ascii = 0;
 }
 
 static void Function_VERG(char* str) {
@@ -41,24 +42,24 @@ static void Function_VERG(char* str) {
 	strncpy(&buf[strlen(buf)], HWVER, strlen(HWVER));
 	buf[strlen(buf)] = ',';
 	strncpy(&buf[strlen(buf)], COMPATIBILITYMODE, strlen(COMPATIBILITYMODE));		
-	Write((uint8_t*)buf, strlen(buf), protocol_ascii);
+	Write((uint8_t*)buf, strlen(buf), g_protocol_ascii);
 }
 
 static void Function_VRBS(char* str) {
-	str = strtok(NULL, ",");
-	systemParameters.verbose_level = atoi((char*)str);
+	str = strtok(NULL, Delims);
+	g_systemParameters.verbose_level = atoi((char*)str);
 }
 
 static void Function_VRBG(char* str) {
 	char buf[10] = {0};
 	strncpy(buf, "VRBG,", 5);
-	itoa(systemParameters.verbose_level, &buf[strlen(buf)], 10);
+	itoa(g_systemParameters.verbose_level, &buf[strlen(buf)], 10);
 	
 	Write((uint8_t*)buf, strlen(buf), 1);
 }
 
 static void Function_IDST(char* str) {
-	str =strtok(NULL, ",");
+	str = strtok(NULL, Delims);
 	if (str != NULL) {
 		int num = atoi(str);
 		if (num <= 127) {
@@ -85,9 +86,9 @@ static void Function_USBN(char* str) {
 
 static void Function_CSETF(char* str) {
 	// "CSETF,1000" - 1000 is in hertz
-	str = strtok(NULL, ",");
+	str = strtok(NULL, Delims);
 	int val = atoi((char*)str);		
-	systemParameters.timer_period = 1e6 / val;	// convert val which are hertz to period which is in us 
+	g_systemParameters.timer_period = 1e6 / val;	// convert val which are hertz to period which is in us 
 	ChangeSampleFrequency();
 }
 
@@ -95,19 +96,19 @@ static void Function_CRESET(char* str) {
 }
 
 static void Function_CTRAIN(char* str) {
-	training = 1000;
+	g_training = 1000;
 }
 
 static void Function_CRAW(char* str) {
-	display_data = RAW;
+	g_display_data = RAW;
 }
 
 static void Function_CTRAINED(char* str) {
-	display_data = TRAINED;
+	g_display_data = TRAINED;
 }
 
 static void Function_CFILTERED(char* str) {
-	display_data = FILTERED;
+	g_display_data = FILTERED;
 }
 
 static void Function_CPARAMS(char* str) {
@@ -117,7 +118,7 @@ static void Function_CPARAMS(char* str) {
 	A2 = atof(str);	
 	str = strtok(NULL, ",");
 	A4 = atof(str);	
-	str = strtok(NULL, ",");
+	str = strtok(NULL, Delims);
 	FTR_THRSHLD = atof(str);
 }
 
@@ -126,12 +127,12 @@ static void Function_CTIMES(char* str) {
 	T_delay = atoi(str);		
 	str = strtok(NULL, ",");
 	T_duration = atoi(str);	
-	str = strtok(NULL, ",");
+	str = strtok(NULL, Delims);
 	T_blind = atoi(str);	
 }
 
 static void Function_CSKIPSCND(char* str) {
-	str = strtok(NULL, ",");
+	str = strtok(NULL, Delims);
 	if (atoi(str) == 1) {
 		skip_2nd = 1;
 		for (int i = 0; i < N_CHANNELS; ++i)
@@ -143,6 +144,11 @@ static void Function_CSKIPSCND(char* str) {
 
 static void Function_PING(char* str) {
 	Write((uint8_t*) "OK", 2, 1);
+}
+
+static void Function_TRGFRM(char* str) {
+	if (g_add_trigger_info) g_add_trigger_info = 0;
+	else g_add_trigger_info = 1;
 }
 
 static struct {
@@ -158,6 +164,7 @@ static struct {
 	{"USBY", Function_USBY},
 	{"USBN", Function_USBN},
 	{"PING", Function_PING},
+	{"TRGFRM", Function_TRGFRM},
 	
 	// Legacy
 	{"CSETF", Function_CSETF},	
@@ -176,12 +183,12 @@ void Parse(char* string) {
 	
 	str = strtok(string, Delims);
 	while (str != NULL) {
-
+		
 		for (int i = 0; i < sizeof(command) / sizeof(command[0]); ++i) {
 			if (strcmp(str, command[i].name) == 0) {
 				command[i].Func(str);
 				break;
-			}			
+			}
 		}		
 		
 		str = strtok(NULL, Delims);
