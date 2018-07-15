@@ -48,7 +48,9 @@ uint32_t	Buffer[BUFFER_SIZE][N_CHANNELS] = { 0 };
 #define		DATA_PER_CHANNEL	100
 #define		SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
 uint32_t	SendBuffer_i = 0;
-float		SendBuffer[SEND_BUFFER_SIZE] = { 0 };
+float		SendBuffer[2][SEND_BUFFER_SIZE] = { 0 };
+int			SendBuffer_alt = 0;
+float*		pSendBuffer;
 
 // GUI settable parameters
 float A1 = 0.01;
@@ -105,7 +107,7 @@ void TIMx_IRQ_Handler() {
 }
 #endif
 
-__attribute__((optimize("O0"))) void DMA2_Stream0_IRQHandler() {
+__attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler() {
 	
 #ifdef DEBUG_TIM
 	GPIOA->BSRR = GPIO_PIN_8 << 16;
@@ -403,24 +405,31 @@ static void Train() {
 
 __attribute__((optimize("O2"))) void AddValues(float* x) {
 	
+	static float tmp_x[N_CHANNELS] = { 0 };
+	
+	// Transfer data to temporary buffer
+	memcpy(tmp_x, x, sizeof(tmp_x));
+	
 	// Add trigger info encoded inside the data (set MSB bit)
 	if (g_add_trigger_info) {
 		for (int i = 0; i < N_CHANNELS; ++i) {
 			if (g_trigger_output & (1 << i)) {
-				((uint32_t*)x)[i] += 0x80000000;   	// set MSB (sign bit) bit to signal a trigger state (for PC app)
+				((uint32_t*)tmp_x)[i] += 0x80000000;   	// set MSB (sign bit) bit to signal a trigger state (for PC app)
 			}
 		}
 	}
 	
 	// Organize data like so: ch1_0,ch1_1,ch1_2,...ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
 	for (int i = 0; i < N_CHANNELS; ++i) {
-		SendBuffer[i * DATA_PER_CHANNEL + SendBuffer_i] = x[i];
-	}	
+		SendBuffer[SendBuffer_alt][i * DATA_PER_CHANNEL + SendBuffer_i] = tmp_x[i];
+	}
 	SendBuffer_i++;
 
-	if (SendBuffer_i >= DATA_PER_CHANNEL) {
-		g_writeToPC = 1;
+	if (SendBuffer_i >= DATA_PER_CHANNEL) {		
 		SendBuffer_i = 0;
+		pSendBuffer = &SendBuffer[SendBuffer_alt][0];
+		SendBuffer_alt = SendBuffer_alt == 0 ? 1 : 0;
+		g_writeToPC = 1;
 	}
 }
 
@@ -544,11 +553,11 @@ int main() {
 					Write(txBuf, 2, 0);
 			}													
 		}	
-		
+				
 		if (g_writeToPC && g_systemParameters.verbose_level > 0) {
-			uint32_t delim = 0xDEADBEEF;
-			VCP_write(&delim, 4);
-			VCP_write(SendBuffer, sizeof(SendBuffer));
+			static const uint32_t g_delim = 0xDEADBEEF;
+			VCP_write(&g_delim, 4);
+			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
 			g_writeToPC = 0;
 		}
 		
