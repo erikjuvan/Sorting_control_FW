@@ -147,8 +147,12 @@ static void Function_PING(char* str) {
 }
 
 static void Function_TRGFRM(char* str) {
-	if (g_add_trigger_info) g_add_trigger_info = 0;
-	else g_add_trigger_info = 1;
+	str = strtok(NULL, Delims);
+	int set = atoi((char*)str);
+	if (set != 0)
+		g_add_trigger_info = 1;
+	else
+		g_add_trigger_info = 0;
 }
 
 static struct {

@@ -407,7 +407,7 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 	if (g_add_trigger_info) {
 		for (int i = 0; i < N_CHANNELS; ++i) {
 			if (g_trigger_output & (1 << i)) {
-				x[i] += 0x80000000;   	// set MSB (sign bit) bit to signal a trigger state (for PC app)
+				((uint32_t*)x)[i] += 0x80000000;   	// set MSB (sign bit) bit to signal a trigger state (for PC app)
 			}
 		}
 	}
