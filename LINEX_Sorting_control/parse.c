@@ -34,7 +34,7 @@ extern CommunicationInterface g_communication_interface;
 const static char Delims[] = "\n\r\t, ";
 
 static void Function_STRT(char* str) {
-	g_communication_mode = ASCII;
+	g_communication_mode = BINARY;
 }
 
 static void Function_VERG(char* str) {

@@ -12,45 +12,54 @@ extern const uint8_t CharacterMatch;
 
 int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size);
+void UARTProcessRead();
 
 CommunicationInterface g_communication_interface = UART;
 CommunicationMode g_communication_mode = ASCII;
 
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
+static int	rx_buffer_size = 0;
+
+void EXTI0_IRQHandler(void) {
+	EXTI->PR = EXTI_PR_PR0; 	// Clear pending bit
+	UARTProcessRead();
+}
 
 void UART_RX_Complete_Callback(const uint8_t* data, int size) {
 	if (g_communication_interface == UART) {
+		rx_buffer_size = size;
 		memcpy(rx_buffer, data, size);
 		rx_buffer[size] = 0;
-		// could trigger software irq here which has smaller priority than UART and then exit this function
-		//EXTI->SWIER = EXTI_SWIER_SWIER0;
-	
-		if (g_communication_mode == ASCII) { // ASCII mode
-			Parse((char*)rx_buffer);
-		} else { // Binary mode
-			for (int i = 0; i < size; ++i) {
-				uint8_t rx_byte = rx_buffer[i];
-				if ((rx_byte & 0x30) == 0x30) { // Data
-					if (i % 2 == 0) rx_buffer[i/2] = (rx_byte & 0x0F) << 4;
-					else rx_buffer[i/2] |= (rx_byte & 0x0F);
-				} else if (rx_byte == 0x1B) { // Escape
-					g_communication_mode = ASCII;
-					return;
-				}
+		EXTI->SWIER = EXTI_SWIER_SWIER0;	// This triggers the EXTI interrupt
+	}
+}
+
+void UARTProcessRead() {
+	if (g_communication_mode == ASCII) { // ASCII mode
+		Parse((char*)rx_buffer);
+	} else { // Binary mode
+		for (int i = 0; i < rx_buffer_size; ++i) {
+			uint8_t rx_byte = rx_buffer[i];
+			if ((rx_byte & 0x30) == 0x30) { // Data
+				if (i % 2 == 0) rx_buffer[i/2] = (rx_byte & 0x0F) << 4;
+				else rx_buffer[i/2] |= (rx_byte & 0x0F);
+			} else if (rx_byte == 0x1B) { // Escape
+				g_communication_mode = ASCII;
+				return;
 			}
-		
-			g_trigger_output = ((uint16_t)rx_buffer[0] << 8) | rx_buffer[1];
-				
-			__disable_irq();
-			uint16_t det_obj = g_detected_objects;
-			g_detected_objects = 0;
-			__enable_irq();
-				
-			uint8_t txBuf[2];
-			txBuf[0] = (det_obj >> 8) & 0xFF;
-			txBuf[1] = det_obj & 0xFF;
-			Write(txBuf, sizeof(txBuf));
 		}
+		
+		g_trigger_output = ((uint16_t)rx_buffer[0] << 8) | rx_buffer[1];
+				
+		__disable_irq();
+		uint16_t det_obj = g_detected_objects;
+		g_detected_objects = 0;
+		__enable_irq();
+				
+		uint8_t txBuf[2];
+		txBuf[0] = (det_obj >> 8) & 0xFF;
+		txBuf[1] = det_obj & 0xFF;
+		Write(txBuf, sizeof(txBuf));
 	}
 }
 

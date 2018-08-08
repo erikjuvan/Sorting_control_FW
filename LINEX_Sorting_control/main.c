@@ -108,10 +108,6 @@ void TIMx_IRQ_Handler() {
 }
 #endif
 
-void EXTI0_IRQHandler(void) {
-	EXTI->PR = EXTI_PR_PR0;	// Clear pending bit
-}
-
 __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler() {
 	
 #ifdef DEBUG_TIM
@@ -513,7 +509,7 @@ static void Init() {
 	ADC_Configure();
 	DMA_Configure();
 	TIM_Configure();
-	//EXTI_Configure();
+	EXTI_Configure();
 		
 	UART_Init();
 	
