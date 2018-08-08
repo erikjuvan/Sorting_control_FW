@@ -85,7 +85,8 @@ uint16_t g_detected_objects = 0;
 int g_training = 0;
 float g_trained_coeffs[N_CHANNELS];
 
-int g_protocol_ascii = 1;
+extern CommunicationMode g_communication_mode;
+extern CommunicationInterface g_communication_interface;
 
 int g_add_trigger_info = 0;
 
@@ -106,6 +107,10 @@ void TIMx_IRQ_Handler() {
 	GPIOA->BSRR = GPIO_PIN_8;
 }
 #endif
+
+void EXTI0_IRQHandler(void) {
+	EXTI->PR = EXTI_PR_PR0;	// Clear pending bit
+}
 
 __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler() {
 	
@@ -357,6 +362,12 @@ void GPIO_Configure() {
 	HAL_GPIO_Init(VALVE_PORT, &GPIO_InitStructure);
 }
 
+void EXTI_Configure() {
+	EXTI->IMR |= EXTI_IMR_IM0;
+	HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
+	HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+
 void ChangeSampleFrequency() {
 	TIMx->ARR = g_systemParameters.timer_period;
 	TIMx->EGR = TIM_EGR_UG;		
@@ -502,6 +513,7 @@ static void Init() {
 	ADC_Configure();
 	DMA_Configure();
 	TIM_Configure();
+	//EXTI_Configure();
 		
 	UART_Init();
 	
@@ -524,54 +536,32 @@ int main() {
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 
 	USB_Init();
-	Communication_Set_UART();
-	g_protocol_ascii = 1;
 	
 	while (1) {
 				
-		read = Read(rxBuf, sizeof(rxBuf), g_protocol_ascii);
-		
-		if (read > 0 && g_protocol_ascii) {	// ASCII
+		read = Read(rxBuf, sizeof(rxBuf));
+
+		if (read > 0 && g_communication_mode == ASCII) {
 			Parse((char*)rxBuf);
 			memset(rxBuf, 0, read);
 		}
-		
-		if (read != 0 && !g_protocol_ascii) { // Binary
-			if (read == -1) { // Escape from Bin mode
-				g_protocol_ascii = 1;
-			} else if (read > 0) {
-				g_trigger_output = ((uint16_t)rxBuf[0] << 8) | rxBuf[1];
-				
-				__disable_irq();
-				uint16_t det_obj = g_detected_objects;
-				g_detected_objects = 0;
-				__enable_irq();
-		
-				txBuf[0] = (det_obj >> 8) & 0xFF;
-				txBuf[1] = det_obj & 0xFF;
-				if (!Communication_Get_USB())	// temporary hack whilst using USB for debuging 
-					Write(txBuf, 2, 0);
-			}													
-		}	
-				
+
 		if (g_writeToPC && g_systemParameters.verbose_level > 0) {
-			static const uint32_t g_delim = 0xDEADBEEF;
+			const uint32_t g_delim = 0xDEADBEEF;
 			VCP_write(&g_delim, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
 			g_writeToPC = 0;
 		}
-		
+
 		// Developement code (should not be used after devel phase)
-		if (!Communication_Get_USB()) {	// if we are in UART mode
+		if (g_communication_interface == UART) {
 			char buf[10];
 			if (VCP_read(buf, 10) > 0) {
 				if (strncmp(buf, "USBY", 4) == 0) {
-					Communication_Set_USB();
-					g_protocol_ascii = 1;
+					g_communication_interface = USB;
+					g_communication_mode = ASCII;
 				}
 			}
 		}
 	}
 }
-
-	

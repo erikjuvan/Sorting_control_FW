@@ -1,28 +1,63 @@
+#include "main.h"
 #include "communication.h"
 #include "uart.h"
+#include "parse.h"
 #include <string.h>
+
+extern uint8_t UART_Address;
+extern uint16_t g_trigger_output;
+extern uint16_t g_detected_objects;
+extern const uint8_t CharacterMatch;
+
 
 int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size);
 
-extern uint8_t UART_Address;
+CommunicationInterface g_communication_interface = UART;
+CommunicationMode g_communication_mode = ASCII;
 
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
-static uint16_t rx_buffer_size;
-
-extern const uint8_t CharacterMatch;
-
-static int usb = 0;
 
 void UART_RX_Complete_Callback(const uint8_t* data, int size) {
-	rx_buffer_size = size > sizeof(rx_buffer) ? sizeof(rx_buffer) : size;
-	memcpy(rx_buffer, data, rx_buffer_size);	
+	if (g_communication_interface == UART) {
+		memcpy(rx_buffer, data, size);
+		rx_buffer[size] = 0;
+		// could trigger software irq here which has smaller priority than UART and then exit this function
+		//EXTI->SWIER = EXTI_SWIER_SWIER0;
+	
+		if (g_communication_mode == ASCII) { // ASCII mode
+			Parse((char*)rx_buffer);
+		} else { // Binary mode
+			for (int i = 0; i < size; ++i) {
+				uint8_t rx_byte = rx_buffer[i];
+				if ((rx_byte & 0x30) == 0x30) { // Data
+					if (i % 2 == 0) rx_buffer[i/2] = (rx_byte & 0x0F) << 4;
+					else rx_buffer[i/2] |= (rx_byte & 0x0F);
+				} else if (rx_byte == 0x1B) { // Escape
+					g_communication_mode = ASCII;
+					return;
+				}
+			}
+		
+			g_trigger_output = ((uint16_t)rx_buffer[0] << 8) | rx_buffer[1];
+				
+			__disable_irq();
+			uint16_t det_obj = g_detected_objects;
+			g_detected_objects = 0;
+			__enable_irq();
+				
+			uint8_t txBuf[2];
+			txBuf[0] = (det_obj >> 8) & 0xFF;
+			txBuf[1] = det_obj & 0xFF;
+			Write(txBuf, sizeof(txBuf));
+		}
+	}
 }
 
-int Read(uint8_t* buffer, int max_size, int ascii) {
+int Read(uint8_t* buffer, int max_size) {
 	int len = 0;
 	
-	if (usb) {
+	if (g_communication_interface == USB) {
 		// This silly loop with delays seems neccessary at least when using PC program terminal.exe when sending a file (not when sending normally via command line)		
 		int tmp = 0;
 		while ((tmp = VCP_read(&buffer[len], max_size - len)) > 0) {
@@ -30,49 +65,27 @@ int Read(uint8_t* buffer, int max_size, int ascii) {
 			for (int i = 0; i < 100000; ++i);	// improvised Delay
 		} 
 		buffer[len] = 0;
-		if (!ascii) {
+		if (g_communication_mode == BINARY) {
 			if (strncmp((const char*)buffer, "ASCII", 5) == 0) { // Escape from BIN to ASCII mode
 				return -1;
 			}
 		}
-	} else {
-		if (rx_buffer_size > 0 && rx_buffer_size < max_size) {
-			len = rx_buffer_size;
-			memcpy(buffer, rx_buffer, len);
-			rx_buffer_size = 0;
-			buffer[len] = 0;
-			
-			if (ascii) { // ASCII mode
-				return len;
-			} else { // Binary mode
-				for (int i = 0; i < len; ++i) {
-					uint8_t rx_byte = buffer[i];
-					if ((rx_byte & 0x30) == 0x30) { // Data
-						if (i % 2 == 0) buffer[i/2] = (rx_byte & 0x0F) << 4;
-						else buffer[i/2] |= (rx_byte & 0x0F);
-					} else if (rx_byte == 0x1B) { // Escape
-						return -1;
-					}
-				}
-				return len / 2;
-			}			
-		}
-	}		
-	
+	}	
+
 	return len;
 }
 
-int Write(const uint8_t* buffer, int size, int ascii) {
+int Write(const uint8_t* buffer, int size) {
 	uint8_t buf[UART_BUFFER_SIZE];
 	int len = 0;		
 	
 	if (size <= 0) return 0;
 	
-	if (usb) {
+	if (g_communication_interface == USB) {
 		memcpy(buf, buffer, size);
 		len = VCP_write(buffer, size);
 	} else {
-		if (ascii) {
+		if (g_communication_mode == ASCII) {
 			int packet_size = 1 + size + 1; // 1 - address byte, + size - payload, + 1 - terminating character
 			
 			if (packet_size > UART_BUFFER_SIZE)
@@ -101,16 +114,4 @@ int Write(const uint8_t* buffer, int size, int ascii) {
 	}
 
 	return len;
-}
-
-void Communication_Set_USB() {
-	usb = 1;
-}
-
-void Communication_Set_UART() {
-	usb = 0;
-}
-
-int Communication_Get_USB() {
-	return usb;
 }

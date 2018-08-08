@@ -112,7 +112,7 @@ void UART_Init() {
 	HAL_MultiProcessor_EnableMuteMode(&UartHandle);
 	HAL_MultiProcessor_EnterMuteMode(&UartHandle);
 	
-	HAL_NVIC_SetPriority(USARTx_IRQn, 0, 1);
+	HAL_NVIC_SetPriority(USARTx_IRQn, 1, 0);
 	HAL_NVIC_EnableIRQ(USARTx_IRQn);
 	
 	USARTx->CR1 |= USART_CR1_RXNEIE;		

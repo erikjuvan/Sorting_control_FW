@@ -28,10 +28,13 @@ extern void ChangeSampleFrequency();
 
 extern uint8_t UART_Address;
 
+extern CommunicationMode g_communication_mode;
+extern CommunicationInterface g_communication_interface;
+
 const static char Delims[] = "\n\r\t, ";
 
 static void Function_STRT(char* str) {
-	g_protocol_ascii = 0;
+	g_communication_mode = ASCII;
 }
 
 static void Function_VERG(char* str) {
@@ -42,7 +45,7 @@ static void Function_VERG(char* str) {
 	strncpy(&buf[strlen(buf)], HWVER, strlen(HWVER));
 	buf[strlen(buf)] = ',';
 	strncpy(&buf[strlen(buf)], COMPATIBILITYMODE, strlen(COMPATIBILITYMODE));		
-	Write((uint8_t*)buf, strlen(buf), g_protocol_ascii);
+	Write((uint8_t*)buf, strlen(buf));
 }
 
 static void Function_VRBS(char* str) {
@@ -55,7 +58,7 @@ static void Function_VRBG(char* str) {
 	strncpy(buf, "VRBG,", 5);
 	itoa(g_systemParameters.verbose_level, &buf[strlen(buf)], 10);
 	
-	Write((uint8_t*)buf, strlen(buf), 1);
+	Write((uint8_t*)buf, strlen(buf));
 }
 
 static void Function_IDST(char* str) {
@@ -73,15 +76,15 @@ static void Function_IDGT(char* str) {
 	strncpy(buf, "ID:", 3);
 	itoa(UART_Address, &buf[strlen(buf)], 10);
 	
-	Write((uint8_t*)buf, strlen(buf), 1);			
+	Write((uint8_t*)buf, strlen(buf));			
 }
 
 static void Function_USBY(char* str) {
-	Communication_Set_USB();
+	g_communication_interface = USB;
 }
 
 static void Function_USBN(char* str) {
-	Communication_Set_UART();
+	g_communication_interface = UART;
 }
 
 static void Function_CSETF(char* str) {
@@ -143,7 +146,7 @@ static void Function_CSKIPSCND(char* str) {
 }
 
 static void Function_PING(char* str) {
-	Write((uint8_t*) "OK", 2, 1);
+	Write((uint8_t*) "OK", 2);
 }
 
 static void Function_TRGFRM(char* str) {
