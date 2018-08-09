@@ -60,8 +60,6 @@ float FTR_THRSHLD = 7.0;
 uint32_t T_delay = 0;
 uint32_t T_duration = 100;
 uint32_t T_blind = 1000;
-int skip_2nd = 0;
-int skip_2nd_cntr[N_CHANNELS] = {0};
 
 struct SystemParameters g_systemParameters = {
 		.timer_period = 1000,
@@ -441,13 +439,8 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 }
 
 __attribute__((optimize("O2"))) void ObjectDetected(int idx) {
-	int set = 1;
-	if (skip_2nd) {				
-		if (skip_2nd_cntr[idx]++ % 2)
-			set = 0;
-	}
 	
-	if (set && ((1 << idx) & g_trigger_output)) {
+	if ((1 << idx) & g_trigger_output) {
 		g_delay_timer[idx] = T_delay;
 	}
 	

@@ -134,17 +134,6 @@ static void Function_CTIMES(char* str) {
 	T_blind = atoi(str);	
 }
 
-static void Function_CSKIPSCND(char* str) {
-	str = strtok(NULL, Delims);
-	if (atoi(str) == 1) {
-		skip_2nd = 1;
-		for (int i = 0; i < N_CHANNELS; ++i)
-			skip_2nd_cntr[i] = 0;
-	} else {
-		skip_2nd = 0;
-	}
-}
-
 static void Function_PING(char* str) {
 	Write((uint8_t*) "OK", 2);
 }
@@ -182,7 +171,6 @@ static struct {
 	{"CFILTERED", Function_CFILTERED},
 	{"CPARAMS", Function_CPARAMS},
 	{"CTIMES", Function_CTIMES},
-	{"CSKIPSCND", Function_CSKIPSCND},
 };
 
 void Parse(char* string) {
