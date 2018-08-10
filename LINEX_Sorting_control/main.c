@@ -516,10 +516,27 @@ static void Init() {
 	for (int i = 0; i < N_CHANNELS; ++i) g_trained_coeffs[i] = 1.0;
 }
 
+void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
+	if (g_communication_mode == ASCII) { // ASCII mode
+		Parse((char*)buf);
+	} else { // Binary
+		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];
+				
+		__disable_irq();
+		uint16_t det_obj = g_detected_objects;
+		g_detected_objects = 0;
+		__enable_irq();
+				
+		uint8_t txBuf[2];
+		txBuf[0] = (det_obj >> 8) & 0xFF;
+		txBuf[1] = det_obj & 0xFF;
+		Write(txBuf, sizeof(txBuf));
+	}
+}
+
 int main() {
 	uint8_t rxBuf[UART_BUFFER_SIZE] = {0};
-	uint8_t txBuf[16] = {0};
-	int tmp = 0, read = 0;
+	int read = 0;
 	
 	Init();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
