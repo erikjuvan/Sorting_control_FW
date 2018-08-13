@@ -38,7 +38,7 @@
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 
-extern USBD_CDC_ItfTypeDef  USBD_CDC_LINEX_Sorting_control_fops;
+extern USBD_CDC_ItfTypeDef  USBD_CDC_STREAM_SC_CU_fops;
 
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */

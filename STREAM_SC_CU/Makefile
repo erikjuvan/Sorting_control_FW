@@ -5,7 +5,7 @@
 
 #VisualGDB: AutoSourceFiles		#<--- remove this line to disable auto-updating of SOURCEFILES and EXTERNAL_LIBS
 
-TARGETNAME := LINEX_Sorting_control.elf
+TARGETNAME := STREAM_SC_CU.elf
 #TARGETTYPE can be APP, STATIC or SHARED
 TARGETTYPE := APP
 

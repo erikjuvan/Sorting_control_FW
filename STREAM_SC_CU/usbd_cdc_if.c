@@ -67,17 +67,17 @@
   * @{
   */
 
-static int8_t LINEX_Sorting_control_Init     (void);
-static int8_t LINEX_Sorting_control_DeInit   (void);
-static int8_t LINEX_Sorting_control_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length);
-static int8_t LINEX_Sorting_control_Receive  (uint8_t* pbuf, uint32_t *Len);
+static int8_t STREAM_SC_CU_Init     (void);
+static int8_t STREAM_SC_CU_DeInit   (void);
+static int8_t STREAM_SC_CU_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length);
+static int8_t STREAM_SC_CU_Receive  (uint8_t* pbuf, uint32_t *Len);
 
-USBD_CDC_ItfTypeDef USBD_CDC_LINEX_Sorting_control_fops = 
+USBD_CDC_ItfTypeDef USBD_CDC_STREAM_SC_CU_fops = 
 {
-  LINEX_Sorting_control_Init,
-  LINEX_Sorting_control_DeInit,
-  LINEX_Sorting_control_Control,
-  LINEX_Sorting_control_Receive
+  STREAM_SC_CU_Init,
+  STREAM_SC_CU_DeInit,
+  STREAM_SC_CU_Control,
+  STREAM_SC_CU_Receive
 };
 
 USBD_CDC_LineCodingTypeDef linecoding =
@@ -91,7 +91,7 @@ USBD_CDC_LineCodingTypeDef linecoding =
 /* Private functions ---------------------------------------------------------*/
 
 /**
-  * @brief  LINEX_Sorting_control_Init
+  * @brief  STREAM_SC_CU_Init
   *         Initializes the CDC media low layer
   * @param  None
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
@@ -107,7 +107,7 @@ static struct
 
 char g_VCPInitialized;
 
-static int8_t LINEX_Sorting_control_Init(void)
+static int8_t STREAM_SC_CU_Init(void)
 {
 	USBD_CDC_SetRxBuffer(&USBD_Device, s_RxBuffer.Buffer);
 	g_VCPInitialized = 1;
@@ -115,12 +115,12 @@ static int8_t LINEX_Sorting_control_Init(void)
 }
 
 /**
-  * @brief  LINEX_Sorting_control_DeInit
+  * @brief  STREAM_SC_CU_DeInit
   *         DeInitializes the CDC media low layer
   * @param  None
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t LINEX_Sorting_control_DeInit(void)
+static int8_t STREAM_SC_CU_DeInit(void)
 {
   /*
      Add your deinitialization code here 
@@ -130,14 +130,14 @@ static int8_t LINEX_Sorting_control_DeInit(void)
 
 
 /**
-  * @brief  LINEX_Sorting_control_Control
+  * @brief  STREAM_SC_CU_Control
   *         Manage the CDC class requests
   * @param  Cmd: Command code            
   * @param  Buf: Buffer containing command data (request parameters)
   * @param  Len: Number of data to be sent (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t LINEX_Sorting_control_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
+static int8_t STREAM_SC_CU_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
 { 
   switch (cmd)
   {
@@ -199,7 +199,7 @@ static int8_t LINEX_Sorting_control_Control  (uint8_t cmd, uint8_t* pbuf, uint16
 }
 
 /**
-  * @brief  LINEX_Sorting_control_Receive
+  * @brief  STREAM_SC_CU_Receive
   *         Data received over USB OUT endpoint are sent over CDC interface 
   *         through this function.
   *           
@@ -214,7 +214,7 @@ static int8_t LINEX_Sorting_control_Control  (uint8_t cmd, uint8_t* pbuf, uint16
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t LINEX_Sorting_control_Receive(uint8_t* Buf, uint32_t *Len)
+static int8_t STREAM_SC_CU_Receive(uint8_t* Buf, uint32_t *Len)
 {
 	s_RxBuffer.Position = 0;
 	s_RxBuffer.Size = *Len;
