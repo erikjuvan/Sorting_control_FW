@@ -52,6 +52,14 @@ float		SendBuffer[2][SEND_BUFFER_SIZE] = { 0 };
 int			SendBuffer_alt = 0;
 float*		pSendBuffer;
 
+#define		SORTING_ANALYSIS_BUFFER_SIZE	(DATA_PER_CHANNEL*2)
+
+struct {
+		int window_start[SORTING_ANALYSIS_BUFFER_SIZE];
+		int signal_detected[SORTING_ANALYSIS_BUFFER_SIZE];
+		int idx;
+} sorting_analysis[N_CHANNELS];
+
 // GUI settable parameters
 float A1 = 0.01;
 float A2 = 0.03;
@@ -91,8 +99,7 @@ int g_add_trigger_info = 0;
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void) {
-	HAL_IncTick();
-	HAL_SYSTICK_IRQHandler();	
+	HAL_IncTick();	
 }
 
 void OTG_FS_IRQHandler(void) {
@@ -438,13 +445,18 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 	}
 }
 
-__attribute__((optimize("O2"))) void ObjectDetected(int idx) {
+__attribute__((optimize("O2"))) void ObjectDetected(int ch) {
+	if (sorting_analysis[ch].window_start[sorting_analysis[ch].idx] > 0) {	// if there is an active window
+		sorting_analysis[ch].signal_detected[sorting_analysis[ch].idx] = HAL_GetTick();
+		if (sorting_analysis[ch].idx < (SORTING_ANALYSIS_BUFFER_SIZE - 1))
+			sorting_analysis[ch].idx++;
+	}	
 	
-	if ((1 << idx) & g_trigger_output) {
-		g_delay_timer[idx] = T_delay;
+	if ((1 << ch) & g_trigger_output) {
+		g_delay_timer[ch] = T_delay;
 	}
 	
-	g_detected_objects |= 1 << idx;
+	g_detected_objects |= 1 << ch;
 }
 
 __attribute__((optimize("O2"))) void Filter(float* x) {
@@ -520,8 +532,26 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 	if (g_communication_mode == ASCII) { // ASCII mode
 		Parse((char*)buf);
 	} else { // Binary
-		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];
-				
+		static uint16_t prev_trig_out = 0;
+		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];		
+		uint16_t diff = g_trigger_output ^ prev_trig_out;
+		prev_trig_out = g_trigger_output;
+		
+		int start_time = HAL_GetTick();
+		for (int i = 0; i < N_CHANNELS; ++i) {
+			const uint16_t ch_idx = 1 << i;
+			if (ch_idx & diff) {	// there is a change on channel i
+				if (ch_idx & g_trigger_output) {	// there is a rising edge on channel i				
+					sorting_analysis[i].window_start[sorting_analysis[i].idx] = start_time;
+				} else {	// falling edge on channel i											
+					if (sorting_analysis[i].signal_detected[sorting_analysis[i].idx] < 
+					sorting_analysis[i].window_start[sorting_analysis[i].idx]) { // no signal was detected inside window
+						sorting_analysis[i].window_start[sorting_analysis[i].idx] = 0;
+					}
+				}
+			}
+		}
+		
 		__disable_irq();
 		uint16_t det_obj = g_detected_objects;
 		g_detected_objects = 0;
@@ -545,7 +575,7 @@ int main() {
 	
 	while (1) {
 				
-		read = Read(rxBuf, sizeof(rxBuf));
+		read = Read(rxBuf, sizeof(rxBuf)); 
 
 		if (read > 0 && g_communication_mode == ASCII) {
 			Parse((char*)rxBuf);
@@ -556,6 +586,35 @@ int main() {
 			const uint32_t g_delim = 0xDEADBEEF;
 			VCP_write(&g_delim, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
+			
+			#define MIN_START_VALUE	123456789
+			static int loop_count = 0;		
+			static int values[3] = {MIN_START_VALUE, 0, 0}, cnt = 0, mean = 0; // min, max, mean			
+			if (loop_count++ > 100) {
+				loop_count = 0;
+				values[0] = MIN_START_VALUE;
+				values[1] = 0;
+				for (int ch = 0; ch < N_CHANNELS; ++ch) {
+					int len = sorting_analysis[ch].idx;
+					for (int i = 0; i < len; ++i) {
+						cnt++;
+						int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
+						if (diff < values[0]) values[0] = diff;
+						if (diff > values[1]) values[1] = diff;
+						mean += diff;
+						sorting_analysis[ch].window_start[i] = 0;
+						sorting_analysis[ch].signal_detected[i] = 0;
+					}
+					sorting_analysis[ch].idx = 0;
+				}
+				values[2] = mean / cnt;
+				if (cnt >= 1000) {	// reset mean value after 1000 products
+					mean = 0;
+					cnt = 0;
+				}
+			}
+			VCP_write(values, sizeof(values));
+			
 			g_writeToPC = 0;
 		}
 
