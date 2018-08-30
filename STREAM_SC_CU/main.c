@@ -52,13 +52,15 @@ float		SendBuffer[2][SEND_BUFFER_SIZE] = { 0 };
 int			SendBuffer_alt = 0;
 float*		pSendBuffer;
 
-#define		SORTING_ANALYSIS_BUFFER_SIZE	(DATA_PER_CHANNEL*2)
+#define		SORTING_ANALYSIS_BUFFER_SIZE	(DATA_PER_CHANNEL)
 
 struct {
 		int window_start[SORTING_ANALYSIS_BUFFER_SIZE];
 		int signal_detected[SORTING_ANALYSIS_BUFFER_SIZE];
 		int idx;
 } sorting_analysis[N_CHANNELS];
+
+uint16_t sorting_analysis_send_buf[100];
 
 // GUI settable parameters
 float A1 = 0.01;
@@ -583,38 +585,30 @@ int main() {
 		}
 
 		if (g_writeToPC && g_systemParameters.verbose_level > 0) {
-			const uint32_t g_delim = 0xDEADBEEF;
-			VCP_write(&g_delim, 4);
+			const uint32_t delim1 = 0xDEADBEEF;
+			VCP_write(&delim1, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
 			
-			#define MIN_START_VALUE	123456789
-			static int loop_count = 0;		
-			static int values[3] = {MIN_START_VALUE, 0, 0}, cnt = 0, mean = 0; // min, max, mean			
+			static int loop_count = 0;
 			if (loop_count++ > 100) {
 				loop_count = 0;
-				values[0] = MIN_START_VALUE;
-				values[1] = 0;
+				
+				int size = 0;				
 				for (int ch = 0; ch < N_CHANNELS; ++ch) {
-					int len = sorting_analysis[ch].idx;
+					const int len = sorting_analysis[ch].idx;
 					for (int i = 0; i < len; ++i) {
-						cnt++;
-						int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
-						if (diff < values[0]) values[0] = diff;
-						if (diff > values[1]) values[1] = diff;
-						mean += diff;
-						sorting_analysis[ch].window_start[i] = 0;
+						const int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
 						sorting_analysis[ch].signal_detected[i] = 0;
+						sorting_analysis[ch].window_start[i] = 0;
+						sorting_analysis_send_buf[size++] = (ch << 8) | (diff & 0xFF);
 					}
 					sorting_analysis[ch].idx = 0;
-				}
-				values[2] = mean / cnt;
-				if (cnt >= 1000) {	// reset mean value after 1000 products
-					mean = 0;
-					cnt = 0;
-				}
+				}	
+				const uint32_t delim2 = 0xABCDDCBA;
+				VCP_write(&delim2, 4);
+				VCP_write(sorting_analysis_send_buf, size);				
 			}
-			VCP_write(values, sizeof(values));
-			
+						
 			g_writeToPC = 0;
 		}
 
