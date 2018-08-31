@@ -52,15 +52,15 @@ float		SendBuffer[2][SEND_BUFFER_SIZE] = { 0 };
 int			SendBuffer_alt = 0;
 float*		pSendBuffer;
 
-#define		SORTING_ANALYSIS_BUFFER_SIZE	(DATA_PER_CHANNEL)
+#define		ANALYSIS_PACKETS	(10)
 
 struct {
-		int window_start[SORTING_ANALYSIS_BUFFER_SIZE];
-		int signal_detected[SORTING_ANALYSIS_BUFFER_SIZE];
-		int idx;
-} sorting_analysis[N_CHANNELS];
+	int window_start[ANALYSIS_PACKETS];
+	int signal_detected[ANALYSIS_PACKETS];
+	int idx;
+} sorting_analysis[N_CHANNELS] = { 0 };
 
-uint16_t sorting_analysis_send_buf[100];
+uint32_t sorting_analysis_send_buf[ANALYSIS_PACKETS * N_CHANNELS] = { 0 };
 
 // GUI settable parameters
 float A1 = 0.01;
@@ -450,7 +450,7 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 __attribute__((optimize("O2"))) void ObjectDetected(int ch) {
 	if (sorting_analysis[ch].window_start[sorting_analysis[ch].idx] > 0) {	// if there is an active window
 		sorting_analysis[ch].signal_detected[sorting_analysis[ch].idx] = HAL_GetTick();
-		if (sorting_analysis[ch].idx < (SORTING_ANALYSIS_BUFFER_SIZE - 1))
+		if (sorting_analysis[ch].idx < (ANALYSIS_PACKETS - 1))
 			sorting_analysis[ch].idx++;
 	}	
 	
@@ -566,6 +566,25 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 	}
 }
 
+static void SortingInfoSend() {		
+	int size = 0;				
+	for (int ch = 0; ch < N_CHANNELS; ++ch) {
+		const int len = sorting_analysis[ch].idx;
+		for (int i = 0; i < len; ++i) {
+			const int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
+			sorting_analysis[ch].signal_detected[i] = 0;
+			sorting_analysis[ch].window_start[i] = 0;
+			sorting_analysis_send_buf[size++] = (ch << 24) | (diff & 0x00FFFFFF);
+		}
+		sorting_analysis[ch].idx = 0;
+	}
+
+	const uint32_t delim2 = 0xABCDDCBA;
+	VCP_write(&delim2, 4);
+	VCP_write(sorting_analysis_send_buf, sizeof(sorting_analysis_send_buf));
+	memset(sorting_analysis_send_buf, 0, sizeof(sorting_analysis_send_buf));
+}
+
 int main() {
 	uint8_t rxBuf[UART_BUFFER_SIZE] = {0};
 	int read = 0;
@@ -588,27 +607,11 @@ int main() {
 			const uint32_t delim1 = 0xDEADBEEF;
 			VCP_write(&delim1, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
-			
 			static int loop_count = 0;
 			if (loop_count++ > 100) {
 				loop_count = 0;
-				
-				int size = 0;				
-				for (int ch = 0; ch < N_CHANNELS; ++ch) {
-					const int len = sorting_analysis[ch].idx;
-					for (int i = 0; i < len; ++i) {
-						const int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
-						sorting_analysis[ch].signal_detected[i] = 0;
-						sorting_analysis[ch].window_start[i] = 0;
-						sorting_analysis_send_buf[size++] = (ch << 8) | (diff & 0xFF);
-					}
-					sorting_analysis[ch].idx = 0;
-				}	
-				const uint32_t delim2 = 0xABCDDCBA;
-				VCP_write(&delim2, 4);
-				VCP_write(sorting_analysis_send_buf, size);				
+				SortingInfoSend();
 			}
-						
 			g_writeToPC = 0;
 		}
 
