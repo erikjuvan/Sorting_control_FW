@@ -38,13 +38,8 @@ static void Function_STRT(char* str) {
 }
 
 static void Function_VERG(char* str) {
-	char buf[100] = {0};
-	strncpy(&buf[strlen(buf)], "VERG,", 5);
-	strncpy(&buf[strlen(buf)], SWVER, strlen(SWVER));
-	buf[strlen(buf)] = ',';
-	strncpy(&buf[strlen(buf)], HWVER, strlen(HWVER));
-	buf[strlen(buf)] = ',';
-	strncpy(&buf[strlen(buf)], COMPATIBILITYMODE, strlen(COMPATIBILITYMODE));		
+	char buf[100] = {0};	
+	snprintf(buf, sizeof(buf), "VERG,%s,%s,%s\n", SWVER, HWVER, COMPATIBILITYMODE);
 	Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -54,9 +49,8 @@ static void Function_VRBS(char* str) {
 }
 
 static void Function_VRBG(char* str) {
-	char buf[10] = {0};
-	strncpy(buf, "VRBG,", 5);
-	itoa(g_systemParameters.verbose_level, &buf[strlen(buf)], 10);
+	char buf[10] = {0};	
+	snprintf(buf, sizeof(buf), "VRBG,%u\n", g_systemParameters.verbose_level);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
@@ -72,9 +66,8 @@ static void Function_IDST(char* str) {
 }
 
 static void Function_IDGT(char* str) {	
-	char buf[10] = {0};
-	strncpy(buf, "ID:", 3);
-	itoa(UART_Address, &buf[strlen(buf)], 10);
+	char buf[10] = {0};	
+	snprintf(buf, sizeof(buf), "ID:%u\n", UART_Address);
 	
 	Write((uint8_t*)buf, strlen(buf));			
 }
@@ -135,7 +128,7 @@ static void Function_CTIMES(char* str) {
 }
 
 static void Function_PING(char* str) {
-	Write((uint8_t*) "OK", 2);
+	Write((uint8_t*) "OK\n", 2);
 }
 
 static void Function_TRGFRM(char* str) {
@@ -146,6 +139,29 @@ static void Function_TRGFRM(char* str) {
 	else
 		g_add_trigger_info = 0;
 }
+
+static void Function_CGETF(char* str) {
+	char buf[10] = {0};
+	int hz = 1e6 / g_systemParameters.timer_period;
+	snprintf(buf, sizeof(buf), "%u\n", hz);
+	
+	Write((uint8_t*)buf, strlen(buf));
+}
+
+static void Function_CGETPARAMS(char* str) {
+	char buf[50] = {0};
+	snprintf(buf, sizeof(buf), "%.2f,%.2f,%.2f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
+	
+	Write((uint8_t*)buf, strlen(buf));
+}
+
+static void Function_CGETTIMES(char* str) {
+	char buf[50] = {0};
+	snprintf(buf, sizeof(buf), "%u,%u,%u\n", T_delay, T_duration, T_blind);
+	
+	Write((uint8_t*)buf, strlen(buf));
+}
+
 
 static struct {
 	const char* name;
@@ -161,6 +177,11 @@ static struct {
 	{"USBN", Function_USBN},
 	{"PING", Function_PING},
 	{"TRGFRM", Function_TRGFRM},
+	
+	// New but built on legacy format
+	{"CGETF", Function_CGETF},		
+	{"CGETPARAMS", Function_CGETPARAMS},
+	{"CGETTIMES", Function_CGETTIMES},
 	
 	// Legacy
 	{"CSETF", Function_CSETF},	

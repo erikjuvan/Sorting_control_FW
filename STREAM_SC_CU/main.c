@@ -72,7 +72,7 @@ uint32_t T_duration = 100;
 uint32_t T_blind = 1000;
 
 struct SystemParameters g_systemParameters = {
-		.timer_period = 1000,
+		.timer_period = 100,
 		.verbose_level = 0
 	};
 
