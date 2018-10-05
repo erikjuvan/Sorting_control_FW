@@ -98,12 +98,9 @@ int UARTWrite(const uint8_t* buffer, int size) {
 
 int USBRead(uint8_t* buffer, int max_size) {
 	int len = 0;
-	
-	// This silly loop with delays seems neccessary at least when using PC program terminal.exe when sending a file (not when sending normally via command line)		
 	int tmp = 0;
 	while ((tmp = VCP_read(&buffer[len], max_size - len)) > 0) {
 		len += tmp;
-		for (int i = 0; i < 100000; ++i);	// improvised Delay
 	} 
 	buffer[len] = 0;
 
