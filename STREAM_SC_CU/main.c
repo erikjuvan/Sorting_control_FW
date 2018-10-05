@@ -22,6 +22,8 @@ int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size); 
 extern char g_VCPInitialized;
 
+extern CommunicationInterface g_communication_interface;
+
 #define GPIO_SET_BIT(PORT, BIT)		PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT)		PORT->BSRR = (BIT << 16)
 
@@ -38,6 +40,8 @@ extern char g_VCPInitialized;
 
 void AddValues(float* x);
 void Filter(float* x);
+
+Mode g_mode = CONFIG;
 
 ADC_HandleTypeDef	ADC1_Handle;
 DMA_HandleTypeDef	DMA2_Handle;
@@ -90,9 +94,6 @@ uint16_t g_detected_objects = 0;
 
 int g_training = 0;
 float g_trained_coeffs[N_CHANNELS];
-
-extern CommunicationMode g_communication_mode;
-extern CommunicationInterface g_communication_interface;
 
 int g_add_trigger_info = 0;
 
@@ -533,9 +534,9 @@ static void Init() {
 }
 
 void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
-	if (g_communication_mode == ASCII) { // ASCII mode
+	if (g_mode == CONFIG) { // Config mode
 		Parse((char*)buf, UARTWrite);
-	} else if (g_communication_mode == BINARY) { // Binary
+	} else if (g_mode == SORT) { // Sorting mode
 		static uint16_t prev_trig_out = 0;
 		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];		
 		uint16_t diff = g_trigger_output ^ prev_trig_out;

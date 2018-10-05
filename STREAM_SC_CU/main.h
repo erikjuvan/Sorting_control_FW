@@ -7,3 +7,4 @@
 #define COMPATIBILITYMODE "CM00"
 
 typedef enum {RAW, TRAINED, FILTERED} DisplayData;
+typedef enum {SORT, CONFIG} Mode;

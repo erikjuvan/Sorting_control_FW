@@ -6,12 +6,12 @@
 
 extern uint8_t UART_Address;
 extern const uint8_t CharacterMatch;
+extern Mode g_mode;
 
 int VCP_read(void *pBuffer, int size);
 int VCP_write(const void *pBuffer, int size);
 
 CommunicationInterface	g_communication_interface = UART;
-CommunicationMode		g_communication_mode = ASCII;
 
 static uint8_t	rx_buffer[UART_BUFFER_SIZE];
 static int		rx_buffer_size = 0;
@@ -39,7 +39,7 @@ void EXTI0_IRQHandler(void) {
 
 static void UART_RX_Process() {
 	// If com mode is binary then extract data
-	if (g_communication_mode == BINARY) {
+	if (g_mode == SORT) {
 		for(int i = 0 ; i < rx_buffer_size ; ++i) {
 			uint8_t rx_byte = rx_buffer[i];
 			if ((rx_byte & 0x30) == 0x30) { // Data
@@ -47,7 +47,7 @@ static void UART_RX_Process() {
 				else rx_buffer[i / 2] |= (rx_byte & 0x0F);
 			}
 			else if (rx_byte == 0x1B) { // Escape
-				g_communication_mode = ASCII;
+				g_mode = CONFIG;
 				return;
 			}
 		}
@@ -66,7 +66,7 @@ int UARTWrite(const uint8_t* buffer, int size) {
 	
 	if (size <= 0) return 0;
 	
-	if (g_communication_mode == ASCII) {
+	if (g_mode == CONFIG) {
 		int packet_size = 1 + size + 1; // 1 - address byte, + size - payload, + 1 - terminating character
 			
 		if (packet_size > UART_BUFFER_SIZE)
@@ -76,7 +76,7 @@ int UARTWrite(const uint8_t* buffer, int size) {
 		memcpy(&buf[1], buffer, size);
 		buf[packet_size-1] = CharacterMatch;	// add terminating character
 		len = UART_Write(buf, packet_size);
-	} else if (g_communication_mode == BINARY){
+	} else if (g_mode == SORT){
 		int packet_size = 1 + size * 2 + 1; // 1 - address byte, size*2 - payload (each byte is split into 2 send bytes), + 1 - terminating character
 	
 		if (packet_size > UART_BUFFER_SIZE)

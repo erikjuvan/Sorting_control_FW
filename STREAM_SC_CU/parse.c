@@ -6,6 +6,9 @@
 #include <string.h>
 #include <stdlib.h>
 
+extern Mode g_mode;
+extern CommunicationInterface g_communication_interface;
+
 extern int g_training;
 extern int g_add_trigger_info;
 extern int g_timer_period;
@@ -25,17 +28,14 @@ extern void ChangeSampleFrequency();
 
 extern uint8_t UART_Address;
 
-extern CommunicationMode g_communication_mode;
-extern CommunicationInterface g_communication_interface;
-
 const static char Delims[] = "\n\r\t, ";
 
-static void Function_BINARY(char* str,  write_func Write) {
-	g_communication_mode = BINARY;
+static void Function_SORT(char* str,  write_func Write) {
+	g_mode = SORT;
 }
 
-static void Function_ASCII(char* str,  write_func Write) {
-	g_communication_mode = ASCII;
+static void Function_CONFIG(char* str,  write_func Write) {
+	g_mode = CONFIG;
 }
 
 static void Function_USB(char* str,  write_func Write) {
@@ -46,9 +46,9 @@ static void Function_UART(char* str,  write_func Write) {
 	g_communication_interface = UART;
 }
 
-static void Function_UART_BINARY(char* str,  write_func Write) {
+static void Function_UART_SORT(char* str,  write_func Write) {
 	g_communication_interface = UART;
-	g_communication_mode = BINARY;
+	g_mode = SORT;
 }
 static void Function_VERG(char* str,  write_func Write) {
 	char buf[100] = {0};	
@@ -187,11 +187,11 @@ static struct {
 	const char* name;
 	void (*Func)(char*,  write_func);
 } command[] = {
-	{"BINARY", Function_BINARY},
-	{"ASCII", Function_ASCII},
+	{"SORT", Function_SORT},
+	{"CONFIG", Function_CONFIG},
 	{"USB", Function_USB},
 	{"UART", Function_UART},
-	{"UART_BINARY", Function_UART_BINARY},
+	{"UART_SORT", Function_UART_SORT},
 	{"VERG", Function_VERG},
 	{"VRBS", Function_VRBS},
 	{"VRBG", Function_VRBG},
