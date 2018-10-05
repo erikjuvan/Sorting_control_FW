@@ -71,10 +71,8 @@ uint32_t T_delay = 0;
 uint32_t T_duration = 100;
 uint32_t T_blind = 1000;
 
-struct SystemParameters g_systemParameters = {
-		.timer_period = 100,
-		.verbose_level = 0
-	};
+int g_timer_period = 100;
+int g_verbose_level = 0;
 
 #define VALVE_PORT	GPIOD
 #define VALVE_PINS	(GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
@@ -372,7 +370,7 @@ void EXTI_Configure() {
 }
 
 void ChangeSampleFrequency() {
-	TIMx->ARR = g_systemParameters.timer_period;
+	TIMx->ARR = g_timer_period;
 	TIMx->EGR = TIM_EGR_UG;		
 }
 
@@ -528,12 +526,16 @@ static void Init() {
 
 	// Set all coeffs to 1.0 (untrained)
 	for (int i = 0; i < N_CHANNELS; ++i) g_trained_coeffs[i] = 1.0;
+	
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+
+	USB_Init();
 }
 
 void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 	if (g_communication_mode == ASCII) { // ASCII mode
-		Parse((char*)buf);
-	} else { // Binary
+		Parse((char*)buf, UARTWrite);
+	} else if (g_communication_mode == BINARY) { // Binary
 		static uint16_t prev_trig_out = 0;
 		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];		
 		uint16_t diff = g_trigger_output ^ prev_trig_out;
@@ -562,7 +564,7 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 		uint8_t txBuf[2];
 		txBuf[0] = (det_obj >> 8) & 0xFF;
 		txBuf[1] = det_obj & 0xFF;
-		Write(txBuf, sizeof(txBuf));
+		UARTWrite(txBuf, sizeof(txBuf));
 	}
 }
 
@@ -587,23 +589,19 @@ static void SortingInfoSend() {
 
 int main() {
 	uint8_t rxBuf[UART_BUFFER_SIZE] = {0};
-	int read = 0;
+	int usb_read = 0;
 	
-	Init();
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
-
-	USB_Init();
+	Init();	
 	
 	while (1) {
 				
-		read = Read(rxBuf, sizeof(rxBuf)); 
-
-		if (read > 0 && g_communication_mode == ASCII) {
-			Parse((char*)rxBuf);
-			memset(rxBuf, 0, read);
+		usb_read = USBRead(rxBuf, sizeof(rxBuf)); 
+		if (usb_read > 0) {
+			Parse((char*)rxBuf, USBWrite);
+			memset(rxBuf, 0, usb_read);
 		}
 
-		if (g_writeToPC && g_systemParameters.verbose_level > 0) {
+		if (g_writeToPC && g_verbose_level > 0) {
 			const uint32_t delim1 = 0xDEADBEEF;
 			VCP_write(&delim1, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
@@ -613,17 +611,6 @@ int main() {
 				SortingInfoSend();
 			}
 			g_writeToPC = 0;
-		}
-
-		// Developement code (should not be used after devel phase)
-		if (g_communication_interface == UART) {
-			char buf[10];
-			if (VCP_read(buf, 10) > 0) {
-				if (strncmp(buf, "USBY", 4) == 0) {
-					g_communication_interface = USB;
-					g_communication_mode = ASCII;
-				}
-			}
-		}
+		}		
 	}
 }

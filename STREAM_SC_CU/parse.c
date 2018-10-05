@@ -6,10 +6,10 @@
 #include <string.h>
 #include <stdlib.h>
 
-extern int g_protocol_ascii;
 extern int g_training;
 extern int g_add_trigger_info;
-extern struct SystemParameters g_systemParameters;
+extern int g_timer_period;
+extern int g_verbose_level;
 extern DisplayData g_display_data;
 
 extern float A1;
@@ -21,9 +21,6 @@ extern uint32_t T_delay;
 extern uint32_t T_duration;
 extern uint32_t T_blind;
 
-extern int skip_2nd;
-extern int skip_2nd_cntr[N_CHANNELS];
-
 extern void ChangeSampleFrequency();
 
 extern uint8_t UART_Address;
@@ -33,29 +30,45 @@ extern CommunicationInterface g_communication_interface;
 
 const static char Delims[] = "\n\r\t, ";
 
-static void Function_STRT(char* str) {
+static void Function_BINARY(char* str,  write_func Write) {
 	g_communication_mode = BINARY;
 }
 
-static void Function_VERG(char* str) {
+static void Function_ASCII(char* str,  write_func Write) {
+	g_communication_mode = ASCII;
+}
+
+static void Function_USB(char* str,  write_func Write) {
+	g_communication_interface = USB;
+}
+
+static void Function_UART(char* str,  write_func Write) {
+	g_communication_interface = UART;
+}
+
+static void Function_UART_BINARY(char* str,  write_func Write) {
+	g_communication_interface = UART;
+	g_communication_mode = BINARY;
+}
+static void Function_VERG(char* str,  write_func Write) {
 	char buf[100] = {0};	
 	snprintf(buf, sizeof(buf), "VERG,%s,%s,%s\n", SWVER, HWVER, COMPATIBILITYMODE);
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_VRBS(char* str) {
+static void Function_VRBS(char* str,  write_func Write) {
 	str = strtok(NULL, Delims);
-	g_systemParameters.verbose_level = atoi((char*)str);
+	g_verbose_level = atoi((char*)str);
 }
 
-static void Function_VRBG(char* str) {
+static void Function_VRBG(char* str,  write_func Write) {
 	char buf[10] = {0};	
-	snprintf(buf, sizeof(buf), "VRBG,%u\n", g_systemParameters.verbose_level);
+	snprintf(buf, sizeof(buf), "VRBG,%u\n", g_verbose_level);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_IDST(char* str) {
+static void Function_IDST(char* str,  write_func Write) {
 	str = strtok(NULL, Delims);
 	if (str != NULL) {
 		int num = atoi(str);
@@ -65,49 +78,48 @@ static void Function_IDST(char* str) {
 	}
 }
 
-static void Function_IDGT(char* str) {	
+static void Function_IDGT(char* str,  write_func Write) {	
 	char buf[10] = {0};	
 	snprintf(buf, sizeof(buf), "ID:%u\n", UART_Address);
 	
 	Write((uint8_t*)buf, strlen(buf));			
 }
 
-static void Function_USBY(char* str) {
-	g_communication_interface = USB;
-}
-
-static void Function_USBN(char* str) {
-	g_communication_interface = UART;
-}
-
-static void Function_CSETF(char* str) {
+static void Function_CSETF(char* str,  write_func Write) {
 	// "CSETF,1000" - 1000 is in hertz
 	str = strtok(NULL, Delims);
 	int val = atoi((char*)str);		
-	g_systemParameters.timer_period = 1e6 / val;	// convert val which are hertz to period which is in us 
+	g_timer_period = 1e6 / val;	// convert val which are hertz to period which is in us 
 	ChangeSampleFrequency();
 }
 
-static void Function_CRESET(char* str) {
+static void Function_CRESET(char* str,  write_func Write) {
 }
 
-static void Function_CTRAIN(char* str) {
+static void Function_CTRAIN(char* str,  write_func Write) {
 	g_training = 1000;
 }
 
-static void Function_CRAW(char* str) {
+static void Function_CRAW(char* str,  write_func Write) {
 	g_display_data = RAW;
 }
 
-static void Function_CTRAINED(char* str) {
+static void Function_CTRAINED(char* str,  write_func Write) {
 	g_display_data = TRAINED;
 }
 
-static void Function_CFILTERED(char* str) {
+static void Function_CFILTERED(char* str,  write_func Write) {
 	g_display_data = FILTERED;
 }
 
-static void Function_CPARAMS(char* str) {
+static void Function_CGETVIEW(char* str, write_func Write) {
+	char buf[10] = {0};	
+	snprintf(buf, sizeof(buf), "%u\n", g_display_data);
+	
+	Write((uint8_t*)buf, strlen(buf));	
+}
+
+static void Function_CPARAMS(char* str,  write_func Write) {
 	str = strtok(NULL, ",");
 	A1 = atof(str);		
 	str = strtok(NULL, ",");
@@ -118,7 +130,7 @@ static void Function_CPARAMS(char* str) {
 	FTR_THRSHLD = atof(str);
 }
 
-static void Function_CTIMES(char* str) {
+static void Function_CTIMES(char* str,  write_func Write) {
 	str = strtok(NULL, ",");
 	T_delay = atoi(str);		
 	str = strtok(NULL, ",");
@@ -127,11 +139,11 @@ static void Function_CTIMES(char* str) {
 	T_blind = atoi(str);	
 }
 
-static void Function_PING(char* str) {
+static void Function_PING(char* str,  write_func Write) {
 	Write((uint8_t*) "OK\n", 2);
 }
 
-static void Function_TRGFRM(char* str) {
+static void Function_TRGFRMS(char* str,  write_func Write) {
 	str = strtok(NULL, Delims);
 	int set = atoi((char*)str);
 	if (set != 0)
@@ -140,22 +152,30 @@ static void Function_TRGFRM(char* str) {
 		g_add_trigger_info = 0;
 }
 
-static void Function_CGETF(char* str) {
+static void Function_TRGFRMG(char* str,  write_func Write) {
+	char buf[10] = {0};	
+	snprintf(buf, sizeof(buf), "%u\n", g_add_trigger_info);
+	
+	Write((uint8_t*)buf, strlen(buf));
+}
+
+
+static void Function_CGETF(char* str,  write_func Write) {
 	char buf[10] = {0};
-	int hz = 1e6 / g_systemParameters.timer_period;
+	int hz = 1e6 / g_timer_period;
 	snprintf(buf, sizeof(buf), "%u\n", hz);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_CGETPARAMS(char* str) {
+static void Function_CGETPARAMS(char* str,  write_func Write) {
 	char buf[50] = {0};
 	snprintf(buf, sizeof(buf), "%.2f,%.2f,%.2f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_CGETTIMES(char* str) {
+static void Function_CGETTIMES(char* str,  write_func Write) {
 	char buf[50] = {0};
 	snprintf(buf, sizeof(buf), "%u,%u,%u\n", T_delay, T_duration, T_blind);
 	
@@ -165,23 +185,27 @@ static void Function_CGETTIMES(char* str) {
 
 static struct {
 	const char* name;
-	void (*Func)(char*);
+	void (*Func)(char*,  write_func);
 } command[] = {
-	{"STRT", Function_STRT},
+	{"BINARY", Function_BINARY},
+	{"ASCII", Function_ASCII},
+	{"USB", Function_USB},
+	{"UART", Function_UART},
+	{"UART_BINARY", Function_UART_BINARY},
 	{"VERG", Function_VERG},
 	{"VRBS", Function_VRBS},
 	{"VRBG", Function_VRBG},
 	{"IDST", Function_IDST},
-	{"IDGT", Function_IDGT},
-	{"USBY", Function_USBY},
-	{"USBN", Function_USBN},
+	{"IDGT", Function_IDGT},	
 	{"PING", Function_PING},
-	{"TRGFRM", Function_TRGFRM},
+	{"TRGFRMS", Function_TRGFRMS},
+	{"TRGFRMG", Function_TRGFRMG},
 	
 	// New but built on legacy format
 	{"CGETF", Function_CGETF},		
 	{"CGETPARAMS", Function_CGETPARAMS},
 	{"CGETTIMES", Function_CGETTIMES},
+	{"CGETVIEW", Function_CGETVIEW},
 	
 	// Legacy
 	{"CSETF", Function_CSETF},	
@@ -194,7 +218,7 @@ static struct {
 	{"CTIMES", Function_CTIMES},
 };
 
-void Parse(char* string) {
+void Parse(char* string, write_func Write) {
 	char* str;
 	
 	str = strtok(string, Delims);
@@ -202,7 +226,7 @@ void Parse(char* string) {
 		
 		for (int i = 0; i < sizeof(command) / sizeof(command[0]); ++i) {
 			if (strcmp(str, command[i].name) == 0) {
-				command[i].Func(str);
+				command[i].Func(str, Write);
 				break;
 			}
 		}		
