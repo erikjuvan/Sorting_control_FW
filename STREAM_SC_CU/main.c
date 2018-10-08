@@ -92,6 +92,7 @@ uint8_t g_writeToPC = 0;
 uint16_t g_trigger_output = 0;
 uint16_t g_detected_objects = 0;
 
+int g_system_trained = 0;
 int g_training = 0;
 float g_trained_coeffs[N_CHANNELS];
 
@@ -132,31 +133,21 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler() {
 			fBuf[i] = (float)Buffer[BUFFER_SIZE/2][i];
 	}
 	
-	if (g_training) {
-		g_training--;
-		const float A = 0.01;
-		for (int i = 0; i < N_CHANNELS; ++i)
-			g_trained_coeffs[i] = A * fBuf[i] + (1 - A) * g_trained_coeffs[i];
-		
-		if (g_training <= 0) {
-			for (int i = 0; i < N_CHANNELS; ++i)
-				g_trained_coeffs[i] = 1000.0 / g_trained_coeffs[i];
+	if (g_display_data == FILTERED) {
+		if (g_system_trained) {	// small optimization to not run the for loop if system was never trained
+			for (int i = 0; i < N_CHANNELS; ++i) {
+				fBuf[i] *= g_trained_coeffs[i];
+			}
+		}		
+		Filter(fBuf);
+	} else if (g_display_data == RAW) {
+		AddValues(fBuf);
+	} else if (g_display_data == TRAINED) {
+		for (int i = 0; i < N_CHANNELS; ++i) {
+			fBuf[i] *= g_trained_coeffs[i];
 		}
-	} else {
-		if (g_display_data == RAW) {
-			AddValues(fBuf);
-		} else if (g_display_data == TRAINED) {
-			for (int i = 0; i < N_CHANNELS; ++i) {
-				fBuf[i] *= g_trained_coeffs[i];
-			}
-			AddValues(fBuf);
-		} else if (g_display_data == FILTERED) {
-			for (int i = 0; i < N_CHANNELS; ++i) {
-				fBuf[i] *= g_trained_coeffs[i];
-			}
-			Filter(fBuf);
-		} 
-	}
+		AddValues(fBuf);
+	}   
 	
 	for (int i = 0; i < N_CHANNELS; ++i) {
 		if (g_delay_timer[i] >= 0) {			
@@ -414,6 +405,8 @@ static void Train() {
 	HAL_ADC_Stop(&ADC1_Handle);
 	ADC_Configure();
 	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+	
+	g_system_trained = 1;
 }
 
 __attribute__((optimize("O2"))) void AddValues(float* x) {

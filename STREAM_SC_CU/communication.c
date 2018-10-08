@@ -38,7 +38,7 @@ void EXTI0_IRQHandler(void) {
 //////
 
 static void UART_RX_Process() {
-	// If com mode is binary then extract data
+	// If we are in sorting mode then extract data
 	if (g_mode == SORT) {
 		for(int i = 0 ; i < rx_buffer_size ; ++i) {
 			uint8_t rx_byte = rx_buffer[i];

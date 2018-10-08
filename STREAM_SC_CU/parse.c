@@ -85,7 +85,7 @@ static void Function_IDGT(char* str,  write_func Write) {
 	Write((uint8_t*)buf, strlen(buf));			
 }
 
-static void Function_CSETF(char* str,  write_func Write) {
+static void Function_SETFREQ(char* str,  write_func Write) {
 	// "CSETF,1000" - 1000 is in hertz
 	str = strtok(NULL, Delims);
 	int val = atoi((char*)str);		
@@ -93,33 +93,34 @@ static void Function_CSETF(char* str,  write_func Write) {
 	ChangeSampleFrequency();
 }
 
-static void Function_CRESET(char* str,  write_func Write) {
+static void Function_RESET(char* str,  write_func Write) {
+	NVIC_SystemReset();
 }
 
-static void Function_CTRAIN(char* str,  write_func Write) {
-	g_training = 1000;
+static void Function_TRAIN(char* str,  write_func Write) {
+	// Not currently supported
 }
 
-static void Function_CRAW(char* str,  write_func Write) {
+static void Function_RAW(char* str,  write_func Write) {
 	g_display_data = RAW;
 }
 
-static void Function_CTRAINED(char* str,  write_func Write) {
+static void Function_TRAINED(char* str,  write_func Write) {
 	g_display_data = TRAINED;
 }
 
-static void Function_CFILTERED(char* str,  write_func Write) {
+static void Function_FILTERED(char* str,  write_func Write) {
 	g_display_data = FILTERED;
 }
 
-static void Function_CGETVIEW(char* str, write_func Write) {
+static void Function_GETVIEW(char* str, write_func Write) {
 	char buf[10] = {0};	
 	snprintf(buf, sizeof(buf), "%u\n", g_display_data);
 	
 	Write((uint8_t*)buf, strlen(buf));	
 }
 
-static void Function_CPARAMS(char* str,  write_func Write) {
+static void Function_SETPARAMS(char* str,  write_func Write) {
 	str = strtok(NULL, ",");
 	A1 = atof(str);		
 	str = strtok(NULL, ",");
@@ -130,7 +131,7 @@ static void Function_CPARAMS(char* str,  write_func Write) {
 	FTR_THRSHLD = atof(str);
 }
 
-static void Function_CTIMES(char* str,  write_func Write) {
+static void Function_SETTIMES(char* str,  write_func Write) {
 	str = strtok(NULL, ",");
 	T_delay = atoi(str);		
 	str = strtok(NULL, ",");
@@ -143,7 +144,7 @@ static void Function_PING(char* str,  write_func Write) {
 	Write((uint8_t*) "OK\n", 2);
 }
 
-static void Function_TRGFRMS(char* str,  write_func Write) {
+static void Function_SETTRGFRM(char* str,  write_func Write) {
 	str = strtok(NULL, Delims);
 	int set = atoi((char*)str);
 	if (set != 0)
@@ -152,7 +153,7 @@ static void Function_TRGFRMS(char* str,  write_func Write) {
 		g_add_trigger_info = 0;
 }
 
-static void Function_TRGFRMG(char* str,  write_func Write) {
+static void Function_GETTRGFRM(char* str,  write_func Write) {
 	char buf[10] = {0};	
 	snprintf(buf, sizeof(buf), "%u\n", g_add_trigger_info);
 	
@@ -160,7 +161,7 @@ static void Function_TRGFRMG(char* str,  write_func Write) {
 }
 
 
-static void Function_CGETF(char* str,  write_func Write) {
+static void Function_GETFREQ(char* str,  write_func Write) {
 	char buf[10] = {0};
 	int hz = 1e6 / g_timer_period;
 	snprintf(buf, sizeof(buf), "%u\n", hz);
@@ -168,54 +169,53 @@ static void Function_CGETF(char* str,  write_func Write) {
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_CGETPARAMS(char* str,  write_func Write) {
+static void Function_GETPARAMS(char* str,  write_func Write) {
 	char buf[50] = {0};
 	snprintf(buf, sizeof(buf), "%.2f,%.2f,%.2f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_CGETTIMES(char* str,  write_func Write) {
+static void Function_GETTIMES(char* str,  write_func Write) {
 	char buf[50] = {0};
 	snprintf(buf, sizeof(buf), "%u,%u,%u\n", T_delay, T_duration, T_blind);
 	
 	Write((uint8_t*)buf, strlen(buf));
 }
 
+#define COMMAND(NAME) {#NAME, Function_ ## NAME}
 
 static struct {
 	const char* name;
 	void (*Func)(char*,  write_func);
 } command[] = {
-	{"SORT", Function_SORT},
-	{"CONFIG", Function_CONFIG},
-	{"USB", Function_USB},
-	{"UART", Function_UART},
-	{"UART_SORT", Function_UART_SORT},
-	{"VERG", Function_VERG},
-	{"VRBS", Function_VRBS},
-	{"VRBG", Function_VRBG},
-	{"IDST", Function_IDST},
-	{"IDGT", Function_IDGT},	
-	{"PING", Function_PING},
-	{"TRGFRMS", Function_TRGFRMS},
-	{"TRGFRMG", Function_TRGFRMG},
+	COMMAND(SORT),
+	COMMAND(CONFIG),
+	COMMAND(USB),
+	COMMAND(UART),
+	COMMAND(UART_SORT),
+	COMMAND(VERG),
+	COMMAND(VRBG),
+	COMMAND(VRBS),
+	COMMAND(IDST),
+	COMMAND(IDGT),
+	COMMAND(PING),
+	COMMAND(RESET),
+	COMMAND(TRAIN),
 	
-	// New but built on legacy format
-	{"CGETF", Function_CGETF},		
-	{"CGETPARAMS", Function_CGETPARAMS},
-	{"CGETTIMES", Function_CGETTIMES},
-	{"CGETVIEW", Function_CGETVIEW},
+	COMMAND(GETFREQ),
+	COMMAND(GETPARAMS),
+	COMMAND(GETTIMES),
+	COMMAND(GETVIEW),
+	COMMAND(GETTRGFRM),
 	
-	// Legacy
-	{"CSETF", Function_CSETF},	
-	{"CRESET", Function_CRESET},
-	{"CTRAIN", Function_CTRAIN},
-	{"CRAW", Function_CRAW},
-	{"CTRAINED", Function_CTRAINED},
-	{"CFILTERED", Function_CFILTERED},
-	{"CPARAMS", Function_CPARAMS},
-	{"CTIMES", Function_CTIMES},
+	COMMAND(SETFREQ),
+	COMMAND(SETPARAMS),
+	COMMAND(SETTIMES),
+	COMMAND(RAW),
+	COMMAND(TRAINED),
+	COMMAND(FILTERED),
+	COMMAND(SETTRGFRM),
 };
 
 void Parse(char* string, write_func Write) {
