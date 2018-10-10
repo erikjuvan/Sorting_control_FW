@@ -64,8 +64,6 @@ struct {
 	int idx;
 } sorting_analysis[N_CHANNELS] = { 0 };
 
-uint32_t sorting_analysis_send_buf[ANALYSIS_PACKETS * N_CHANNELS] = { 0 };
-
 // GUI settable parameters
 float A1 = 0.01;
 float A2 = 0.03;
@@ -562,7 +560,8 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 	}
 }
 
-static void SortingInfoSend() {		
+static void SortingInfoSend() {
+	static uint32_t sorting_analysis_send_buf[ANALYSIS_PACKETS * N_CHANNELS] = { 0 };
 	int size = 0;				
 	for (int ch = 0; ch < N_CHANNELS; ++ch) {
 		const int len = sorting_analysis[ch].idx;
