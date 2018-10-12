@@ -4,7 +4,7 @@
 	This file lists the preprocessor macros extracted from your GCC.
 	It is needed for IntelliSense to parse other header files correctly.
 */
-#if defined(_MSC_VER) || defined (__SYSPROGS_CODESENSE__)
+#if defined(_MSC_VER) || defined(__SYSPROGS_CODESENSE__)
 #pragma clang diagnostic push
 
 #pragma clang diagnostic ignored "-Wreserved-id-macro"
@@ -273,7 +273,7 @@
 #define __GCC_ATOMIC_POINTER_LOCK_FREE 2
 #endif
 #ifndef __LLACCUM_MIN__
-#define __LLACCUM_MIN__ (-0X1P31LLK-0X1P31LLK)
+#define __LLACCUM_MIN__ (-0X1P31LLK - 0X1P31LLK)
 #endif
 #ifndef __SIZEOF_INT__
 #define __SIZEOF_INT__ 4
@@ -288,7 +288,7 @@
 #define __USACCUM_IBIT__ 8
 #endif
 #ifndef __USER_LABEL_PREFIX__
-#define __USER_LABEL_PREFIX__ 
+#define __USER_LABEL_PREFIX__
 #endif
 #ifndef __STDC_HOSTED__
 #define __STDC_HOSTED__ 1
@@ -297,7 +297,7 @@
 #define __LDBL_HAS_INFINITY__ 1
 #endif
 #ifndef __LFRACT_MIN__
-#define __LFRACT_MIN__ (-0.5LR-0.5LR)
+#define __LFRACT_MIN__ (-0.5LR - 0.5LR)
 #endif
 #ifndef __HA_IBIT__
 #define __HA_IBIT__ 8
@@ -327,7 +327,7 @@
 #define __LDBL_MIN__ 2.2250738585072014e-308L
 #endif
 #ifndef __FRACT_MIN__
-#define __FRACT_MIN__ (-0.5R-0.5R)
+#define __FRACT_MIN__ (-0.5R - 0.5R)
 #endif
 #ifndef __DEC32_MAX__
 #define __DEC32_MAX__ 9.999999E96DF
@@ -617,7 +617,7 @@
 #define __FLT32X_EPSILON__ 2.2204460492503131e-16F32x
 #endif
 #ifndef __LACCUM_MIN__
-#define __LACCUM_MIN__ (-0X1P31LK-0X1P31LK)
+#define __LACCUM_MIN__ (-0X1P31LK - 0X1P31LK)
 #endif
 #ifndef __ULLACCUM_FBIT__
 #define __ULLACCUM_FBIT__ 32
@@ -638,7 +638,7 @@
 #define __DEC128_MIN__ 1E-6143DL
 #endif
 #ifndef __REGISTER_PREFIX__
-#define __REGISTER_PREFIX__ 
+#define __REGISTER_PREFIX__
 #endif
 #ifndef __UINT16_MAX__
 #define __UINT16_MAX__ 0xffff
@@ -647,7 +647,7 @@
 #define __DBL_HAS_DENORM__ 1
 #endif
 #ifndef __ACCUM_MIN__
-#define __ACCUM_MIN__ (-0X1P15K-0X1P15K)
+#define __ACCUM_MIN__ (-0X1P15K - 0X1P15K)
 #endif
 #ifndef __SQ_IBIT__
 #define __SQ_IBIT__ 0
@@ -665,7 +665,7 @@
 #define __NO_INLINE__ 1
 #endif
 #ifndef __SFRACT_MIN__
-#define __SFRACT_MIN__ (-0.5HR-0.5HR)
+#define __SFRACT_MIN__ (-0.5HR - 0.5HR)
 #endif
 #ifndef __UTQ_FBIT__
 #define __UTQ_FBIT__ 128
@@ -956,7 +956,7 @@
 #define __SFRACT_FBIT__ 7
 #endif
 #ifndef __SACCUM_MIN__
-#define __SACCUM_MIN__ (-0X1P7HK-0X1P7HK)
+#define __SACCUM_MIN__ (-0X1P7HK - 0X1P7HK)
 #endif
 #ifndef __DBL_HAS_QUIET_NAN__
 #define __DBL_HAS_QUIET_NAN__ 1
@@ -1277,7 +1277,7 @@
 #define __PTRDIFF_TYPE__ int
 #endif
 #ifndef __LLFRACT_MIN__
-#define __LLFRACT_MIN__ (-0.5LLR-0.5LLR)
+#define __LLFRACT_MIN__ (-0.5LLR - 0.5LLR)
 #endif
 #ifndef __ATOMIC_SEQ_CST
 #define __ATOMIC_SEQ_CST 5
@@ -1393,7 +1393,6 @@
 //$(TOOLCHAIN_ROOT)\arm-eabi\sys-include
 //$(TOOLCHAIN_ROOT)\arm-eabi\include
 // --- Include directories end --- //
-
 
 // --- Library directories begin --- //
 //$(TOOLCHAIN_ROOT)\lib\gcc\arm-eabi\7.2.0\thumb\fpu\cortex_m7\

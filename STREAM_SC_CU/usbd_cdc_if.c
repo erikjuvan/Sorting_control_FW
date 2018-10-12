@@ -23,7 +23,7 @@
   * limitations under the License.
   *
   ******************************************************************************
-  */ 
+  */
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc_if.h"
@@ -32,61 +32,56 @@
   * @{
   */
 
-
 /** @defgroup USBD_CDC 
   * @brief usbd core module
   * @{
-  */ 
+  */
 
 /** @defgroup USBD_CDC_Private_TypesDefinitions
   * @{
-  */ 
+  */
 /**
   * @}
-  */ 
-
+  */
 
 /** @defgroup USBD_CDC_Private_Defines
   * @{
-  */ 
+  */
 /**
   * @}
-  */ 
-
+  */
 
 /** @defgroup USBD_CDC_Private_Macros
   * @{
-  */ 
+  */
 
 /**
   * @}
-  */ 
-
+  */
 
 /** @defgroup USBD_CDC_Private_FunctionPrototypes
   * @{
   */
 
-static int8_t STREAM_SC_CU_Init     (void);
-static int8_t STREAM_SC_CU_DeInit   (void);
-static int8_t STREAM_SC_CU_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length);
-static int8_t STREAM_SC_CU_Receive  (uint8_t* pbuf, uint32_t *Len);
+static int8_t STREAM_SC_CU_Init(void);
+static int8_t STREAM_SC_CU_DeInit(void);
+static int8_t STREAM_SC_CU_Control(uint8_t cmd, uint8_t* pbuf, uint16_t length);
+static int8_t STREAM_SC_CU_Receive(uint8_t* pbuf, uint32_t* Len);
 
-USBD_CDC_ItfTypeDef USBD_CDC_STREAM_SC_CU_fops = 
-{
-  STREAM_SC_CU_Init,
-  STREAM_SC_CU_DeInit,
-  STREAM_SC_CU_Control,
-  STREAM_SC_CU_Receive
-};
+USBD_CDC_ItfTypeDef USBD_CDC_STREAM_SC_CU_fops =
+    {
+        STREAM_SC_CU_Init,
+        STREAM_SC_CU_DeInit,
+        STREAM_SC_CU_Control,
+        STREAM_SC_CU_Receive};
 
 USBD_CDC_LineCodingTypeDef linecoding =
-  {
-    115200, /* baud rate*/
-    0x00,   /* stop bits-1*/
-    0x00,   /* parity - none*/
-    0x08    /* nb. of bits 8*/
-  };
+    {
+        115200, /* baud rate*/
+        0x00,   /* stop bits-1*/
+        0x00,   /* parity - none*/
+        0x08    /* nb. of bits 8*/
+};
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -100,18 +95,18 @@ extern USBD_HandleTypeDef USBD_Device;
 
 static struct
 {
-	uint8_t Buffer[CDC_DATA_HS_OUT_PACKET_SIZE];
-	int Position, Size;
-	char ReadDone;
+    uint8_t Buffer[CDC_DATA_HS_OUT_PACKET_SIZE];
+    int     Position, Size;
+    char    ReadDone;
 } s_RxBuffer;
 
 char g_VCPInitialized;
 
 static int8_t STREAM_SC_CU_Init(void)
 {
-	USBD_CDC_SetRxBuffer(&USBD_Device, s_RxBuffer.Buffer);
-	g_VCPInitialized = 1;
-	return (0);
+    USBD_CDC_SetRxBuffer(&USBD_Device, s_RxBuffer.Buffer);
+    g_VCPInitialized = 1;
+    return (0);
 }
 
 /**
@@ -122,12 +117,11 @@ static int8_t STREAM_SC_CU_Init(void)
   */
 static int8_t STREAM_SC_CU_DeInit(void)
 {
-  /*
+    /*
      Add your deinitialization code here 
-  */  
-  return (0);
+  */
+    return (0);
 }
-
 
 /**
   * @brief  STREAM_SC_CU_Control
@@ -137,65 +131,64 @@ static int8_t STREAM_SC_CU_DeInit(void)
   * @param  Len: Number of data to be sent (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t STREAM_SC_CU_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length)
-{ 
-  switch (cmd)
-  {
-  case CDC_SEND_ENCAPSULATED_COMMAND:
-    /* Add your code here */
-    break;
+static int8_t STREAM_SC_CU_Control(uint8_t cmd, uint8_t* pbuf, uint16_t length)
+{
+    switch (cmd) {
+    case CDC_SEND_ENCAPSULATED_COMMAND:
+        /* Add your code here */
+        break;
 
-  case CDC_GET_ENCAPSULATED_RESPONSE:
-    /* Add your code here */
-    break;
+    case CDC_GET_ENCAPSULATED_RESPONSE:
+        /* Add your code here */
+        break;
 
-  case CDC_SET_COMM_FEATURE:
-    /* Add your code here */
-    break;
+    case CDC_SET_COMM_FEATURE:
+        /* Add your code here */
+        break;
 
-  case CDC_GET_COMM_FEATURE:
-    /* Add your code here */
-    break;
+    case CDC_GET_COMM_FEATURE:
+        /* Add your code here */
+        break;
 
-  case CDC_CLEAR_COMM_FEATURE:
-    /* Add your code here */
-    break;
+    case CDC_CLEAR_COMM_FEATURE:
+        /* Add your code here */
+        break;
 
-  case CDC_SET_LINE_CODING:
-    linecoding.bitrate    = (uint32_t)(pbuf[0] | (pbuf[1] << 8) |\
-                            (pbuf[2] << 16) | (pbuf[3] << 24));
-    linecoding.format     = pbuf[4];
-    linecoding.paritytype = pbuf[5];
-    linecoding.datatype   = pbuf[6];
-    
-    /* Add your code here */
-    break;
+    case CDC_SET_LINE_CODING:
+        linecoding.bitrate    = (uint32_t)(pbuf[0] | (pbuf[1] << 8) |
+                                        (pbuf[2] << 16) | (pbuf[3] << 24));
+        linecoding.format     = pbuf[4];
+        linecoding.paritytype = pbuf[5];
+        linecoding.datatype   = pbuf[6];
 
-  case CDC_GET_LINE_CODING:
-    pbuf[0] = (uint8_t)(linecoding.bitrate);
-    pbuf[1] = (uint8_t)(linecoding.bitrate >> 8);
-    pbuf[2] = (uint8_t)(linecoding.bitrate >> 16);
-    pbuf[3] = (uint8_t)(linecoding.bitrate >> 24);
-    pbuf[4] = linecoding.format;
-    pbuf[5] = linecoding.paritytype;
-    pbuf[6] = linecoding.datatype;     
-    
-    /* Add your code here */
-    break;
+        /* Add your code here */
+        break;
 
-  case CDC_SET_CONTROL_LINE_STATE:
-    /* Add your code here */
-    break;
+    case CDC_GET_LINE_CODING:
+        pbuf[0] = (uint8_t)(linecoding.bitrate);
+        pbuf[1] = (uint8_t)(linecoding.bitrate >> 8);
+        pbuf[2] = (uint8_t)(linecoding.bitrate >> 16);
+        pbuf[3] = (uint8_t)(linecoding.bitrate >> 24);
+        pbuf[4] = linecoding.format;
+        pbuf[5] = linecoding.paritytype;
+        pbuf[6] = linecoding.datatype;
 
-  case CDC_SEND_BREAK:
-     /* Add your code here */
-    break;    
-    
-  default:
-    break;
-  }
+        /* Add your code here */
+        break;
 
-  return (0);
+    case CDC_SET_CONTROL_LINE_STATE:
+        /* Add your code here */
+        break;
+
+    case CDC_SEND_BREAK:
+        /* Add your code here */
+        break;
+
+    default:
+        break;
+    }
+
+    return (0);
 }
 
 /**
@@ -214,47 +207,46 @@ static int8_t STREAM_SC_CU_Control  (uint8_t cmd, uint8_t* pbuf, uint16_t length
   * @param  Len: Number of data received (in bytes)
   * @retval Result of the operation: USBD_OK if all operations are OK else USBD_FAIL
   */
-static int8_t STREAM_SC_CU_Receive(uint8_t* Buf, uint32_t *Len)
+static int8_t STREAM_SC_CU_Receive(uint8_t* Buf, uint32_t* Len)
 {
-	s_RxBuffer.Position = 0;
-	s_RxBuffer.Size = *Len;
-	s_RxBuffer.ReadDone = 1;
-	return (0);
+    s_RxBuffer.Position = 0;
+    s_RxBuffer.Size     = *Len;
+    s_RxBuffer.ReadDone = 1;
+    return (0);
 }
 
 /**
   * @}
-  */ 
+  */
 
 /**
   * @}
-  */ 
+  */
 
 /**
   * @}
-  */ 
+  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 
-int VCP_read(void *pBuffer, int size)
+int VCP_read(void* pBuffer, int size)
 {
-	if (!s_RxBuffer.ReadDone)
-		return 0;
+    if (!s_RxBuffer.ReadDone)
+        return 0;
 
-	int remaining = s_RxBuffer.Size - s_RxBuffer.Position;
-	int todo = MIN(remaining, size);
-	if (todo <= 0)
-		return 0;
+    int remaining = s_RxBuffer.Size - s_RxBuffer.Position;
+    int todo      = MIN(remaining, size);
+    if (todo <= 0)
+        return 0;
 
-	memcpy(pBuffer, s_RxBuffer.Buffer + s_RxBuffer.Position, todo);
-	s_RxBuffer.Position += todo;
-	if (s_RxBuffer.Position >= s_RxBuffer.Size)
-	{
-		s_RxBuffer.ReadDone = 0;
-		USBD_CDC_ReceivePacket(&USBD_Device);
-	}
+    memcpy(pBuffer, s_RxBuffer.Buffer + s_RxBuffer.Position, todo);
+    s_RxBuffer.Position += todo;
+    if (s_RxBuffer.Position >= s_RxBuffer.Size) {
+        s_RxBuffer.ReadDone = 0;
+        USBD_CDC_ReceivePacket(&USBD_Device);
+    }
 
-	return todo;
+    return todo;
 }
 
 #ifdef USE_USB_HS
@@ -263,32 +255,31 @@ enum { kMaxOutPacketSize = CDC_DATA_HS_OUT_PACKET_SIZE };
 enum { kMaxOutPacketSize = CDC_DATA_FS_OUT_PACKET_SIZE };
 #endif
 
-int VCP_write(const void *pBuffer, int size)
+int VCP_write(const void* pBuffer, int size)
 {
-    if (size > kMaxOutPacketSize)
-	{
-		int offset;
-    	int done = 0;
-    	for (offset = 0; offset < size; offset += done)
-		{
-    		int todo = MIN(kMaxOutPacketSize, size - offset);
-			done = VCP_write(((char *)pBuffer) + offset, todo);
-			if (done != todo)
-				return offset + done;
-		}
+    if (size > kMaxOutPacketSize) {
+        int offset;
+        int done = 0;
+        for (offset = 0; offset < size; offset += done) {
+            int todo = MIN(kMaxOutPacketSize, size - offset);
+            done     = VCP_write(((char*)pBuffer) + offset, todo);
+            if (done != todo)
+                return offset + done;
+        }
 
-		return size;
-	}
+        return size;
+    }
 
-	USBD_CDC_HandleTypeDef *pCDC =
-	        (USBD_CDC_HandleTypeDef *)USBD_Device.pClassData;
-	while (pCDC->TxState) {} //Wait for previous transfer
+    USBD_CDC_HandleTypeDef* pCDC =
+        (USBD_CDC_HandleTypeDef*)USBD_Device.pClassData;
+    while (pCDC->TxState) {
+    } //Wait for previous transfer
 
-	USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t *)pBuffer, size);
-	if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
-		return 0;
+    USBD_CDC_SetTxBuffer(&USBD_Device, (uint8_t*)pBuffer, size);
+    if (USBD_CDC_TransmitPacket(&USBD_Device) != USBD_OK)
+        return 0;
 
-	/* Matjazev fix trenutno ni potreben
+    /* Matjazev fix trenutno ni potreben
 	// VCP problem with transmitting arrays sized as multiples of packet size.
 	if (!(size & CDC_DATA_FS_OUT_PACKET_SIZE - 1)) 
 	{ 
@@ -299,7 +290,8 @@ int VCP_write(const void *pBuffer, int size)
 			return 0;
 	}
 	*/
-	
-	while (pCDC->TxState) {} //Wait until transfer is done
-	return size;
+
+    while (pCDC->TxState) {
+    } //Wait until transfer is done
+    return size;
 }

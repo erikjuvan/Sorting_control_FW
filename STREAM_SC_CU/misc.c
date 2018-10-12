@@ -1,6 +1,6 @@
 #include "stm32f7xx_hal.h"
 
-int VCP_read(void *pBuffer, int size);
+int VCP_read(void* pBuffer, int size);
 
 ////////////////////////////
 // Counting cycles using DWT
@@ -30,17 +30,19 @@ double seconds_taken = cycles * (1.0 / (float)SystemCoreClock);
 __asm__("nop");
 */
 
-void EnableCC() {
-	CoreDebug->DEMCR |= 0x01000000;	// Enable DWT and ITM features
-	DWT->CYCCNT = 0;	// Set Cycle Count register to zero	
-	DWT->CTRL |= 1;	// Enable CYCCNT
+void EnableCC()
+{
+    CoreDebug->DEMCR |= 0x01000000; // Enable DWT and ITM features
+    DWT->CYCCNT = 0;                // Set Cycle Count register to zero
+    DWT->CTRL |= 1;                 // Enable CYCCNT
 }
 
-void DisableCC() {
-	DWT->CTRL &= ~1;	// Disable CYCCNT
+void DisableCC()
+{
+    DWT->CTRL &= ~1; // Disable CYCCNT
 }
 
-#define ResetCC() DWT->CYCCNT = 0	// Set Cycle Count register to zero
+#define ResetCC() DWT->CYCCNT = 0 // Set Cycle Count register to zero
 #define GetCC() DWT->CYCCNT
 /////////////////////////////////
 
@@ -62,45 +64,49 @@ __asm__("sub r0, r0, r1");	// r0 = r0 - r1 -> timer counts down
 */
 
 // Usually not neede because HAL_Init() already initializes SysTick
-void StartST() {
-	SysTick->LOAD = SysTick_LOAD_RELOAD_Msk;
-	SysTick->VAL = 0;
-	SysTick->CTRL = 5;
+void StartST()
+{
+    SysTick->LOAD = SysTick_LOAD_RELOAD_Msk;
+    SysTick->VAL  = 0;
+    SysTick->CTRL = 5;
 }
 
-void StopST() {
-	SysTick->CTRL = 0;
+void StopST()
+{
+    SysTick->CTRL = 0;
 }
 
 #define GetSTCVR() SysTick->VAL // The number of core clock cycles taken by the operation is given by: (STCVR1 - STCVR2 - 2)
 /////////////////////////////////
 
-void OutputMCO() {
-	__GPIOA_CLK_ENABLE();
-	__GPIOC_CLK_ENABLE();
-	
-	GPIO_InitTypeDef	GPIO_InitStructure;
-	
-	GPIO_InitStructure.Pin = GPIO_PIN_8;
-	GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStructure.Pull = GPIO_NOPULL;
-	GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_MEDIUM;
-	GPIO_InitStructure.Alternate = 0;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);	
-	
-	GPIO_InitStructure.Pin = GPIO_PIN_9;
-	HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
+void OutputMCO()
+{
+    __GPIOA_CLK_ENABLE();
+    __GPIOC_CLK_ENABLE();
 
-	__HAL_RCC_MCO1_CONFIG(RCC_MCO1SOURCE_PLLCLK, RCC_MCODIV_5);
-	__HAL_RCC_MCO2_CONFIG(RCC_MCO2SOURCE_SYSCLK, RCC_MCODIV_5);
+    GPIO_InitTypeDef GPIO_InitStructure;
+
+    GPIO_InitStructure.Pin       = GPIO_PIN_8;
+    GPIO_InitStructure.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStructure.Pull      = GPIO_NOPULL;
+    GPIO_InitStructure.Speed     = GPIO_SPEED_FREQ_MEDIUM;
+    GPIO_InitStructure.Alternate = 0;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    GPIO_InitStructure.Pin = GPIO_PIN_9;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    __HAL_RCC_MCO1_CONFIG(RCC_MCO1SOURCE_PLLCLK, RCC_MCODIV_5);
+    __HAL_RCC_MCO2_CONFIG(RCC_MCO2SOURCE_SYSCLK, RCC_MCODIV_5);
 }
 
-void WaitForGo() {
-	uint8_t ready = 0, buf[3] = { 0, 0, 0 };
-	while (!ready) {
-		VCP_read(buf, 3);
-		if (buf[0] == 'g' && buf[1] == 'o') {
-			ready = 1;
-		}
-	}
+void WaitForGo()
+{
+    uint8_t ready = 0, buf[3] = {0, 0, 0};
+    while (!ready) {
+        VCP_read(buf, 3);
+        if (buf[0] == 'g' && buf[1] == 'o') {
+            ready = 1;
+        }
+    }
 }
