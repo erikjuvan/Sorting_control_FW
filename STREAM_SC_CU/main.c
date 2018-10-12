@@ -56,14 +56,6 @@ float		SendBuffer[2][SEND_BUFFER_SIZE] = { 0 };
 int			SendBuffer_alt = 0;
 float*		pSendBuffer;
 
-#define		ANALYSIS_PACKETS	(10)
-
-struct {
-	int window_start[ANALYSIS_PACKETS];
-	int signal_detected[ANALYSIS_PACKETS];
-	int idx;
-} sorting_analysis[N_CHANNELS] = { 0 };
-
 // GUI settable parameters
 float A1 = 0.01;
 float A2 = 0.03;
@@ -359,6 +351,44 @@ void EXTI_Configure() {
 	HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 }
 
+static void USB_Init() {
+	USBD_Init(&USBD_Device, &VCP_Desc, 0);
+
+	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
+	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_STREAM_SC_CU_fops);
+	USBD_Start(&USBD_Device);
+}
+
+static void USB_Deinit() {
+	USBD_Stop(&USBD_Device);
+	USBD_DeInit(&USBD_Device);	
+}
+
+static void Init() {
+	HAL_Init();	
+	SystemClock_Config();
+	GPIO_Configure();
+	ADC_Configure();
+	DMA_Configure();
+	TIM_Configure();
+	EXTI_Configure();
+		
+	UART_Init();
+	
+	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
+	
+#ifdef STOPWATCH
+	EnableCC();	  
+#endif
+
+	// Set all coeffs to 1.0 (untrained)
+	for (int i = 0; i < N_CHANNELS; ++i) g_trained_coeffs[i] = 1.0;
+	
+	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+
+	USB_Init();
+}
+
 void ChangeSampleFrequency() {
 	TIMx->ARR = g_timer_period;
 	TIMx->EGR = TIM_EGR_UG;		
@@ -411,7 +441,7 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 	
 	static float tmp_x[N_CHANNELS] = { 0 };
 	
-	// Transfer data to temporary buffer
+	// Transfer data to temporary buffer to not corrupt the original
 	memcpy(tmp_x, x, sizeof(tmp_x));
 	
 	// Add trigger info encoded inside the data (set MSB bit)
@@ -438,11 +468,6 @@ __attribute__((optimize("O2"))) void AddValues(float* x) {
 }
 
 __attribute__((optimize("O2"))) void ObjectDetected(int ch) {
-	if (sorting_analysis[ch].window_start[sorting_analysis[ch].idx] > 0) {	// if there is an active window
-		sorting_analysis[ch].signal_detected[sorting_analysis[ch].idx] = HAL_GetTick();
-		if (sorting_analysis[ch].idx < (ANALYSIS_PACKETS - 1))
-			sorting_analysis[ch].idx++;
-	}	
 	
 	if ((1 << ch) & g_trigger_output) {
 		g_delay_timer[ch] = T_delay;
@@ -486,98 +511,22 @@ __attribute__((optimize("O2"))) void Filter(float* x) {
 	AddValues(y4);
 }
 
-static void USB_Init() {
-	USBD_Init(&USBD_Device, &VCP_Desc, 0);
-
-	USBD_RegisterClass(&USBD_Device, &USBD_CDC);
-	USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_STREAM_SC_CU_fops);
-	USBD_Start(&USBD_Device);
-}
-
-static void USB_Deinit() {
-	USBD_Stop(&USBD_Device);
-	USBD_DeInit(&USBD_Device);	
-}
-
-static void Init() {
-	HAL_Init();	
-	SystemClock_Config();
-	GPIO_Configure();
-	ADC_Configure();
-	DMA_Configure();
-	TIM_Configure();
-	EXTI_Configure();
-		
-	UART_Init();
-	
-	GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
-	
-#ifdef STOPWATCH
-	EnableCC();	  
-#endif
-
-	// Set all coeffs to 1.0 (untrained)
-	for (int i = 0; i < N_CHANNELS; ++i) g_trained_coeffs[i] = 1.0;
-	
-	HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
-
-	USB_Init();
-}
-
 void COM_UART_RX_Complete_Callback(uint8_t* buf, int size) {
 	if (g_mode == CONFIG) { // Config mode
 		Parse((char*)buf, UARTWrite);
 	} else if (g_mode == SORT) { // Sorting mode
-		static uint16_t prev_trig_out = 0;
 		g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];		
-		uint16_t diff = g_trigger_output ^ prev_trig_out;
-		prev_trig_out = g_trigger_output;
-		
-		int start_time = HAL_GetTick();
-		for (int i = 0; i < N_CHANNELS; ++i) {
-			const uint16_t ch_idx = 1 << i;
-			if (ch_idx & diff) {	// there is a change on channel i
-				if (ch_idx & g_trigger_output) {	// there is a rising edge on channel i				
-					sorting_analysis[i].window_start[sorting_analysis[i].idx] = start_time;
-				} else {	// falling edge on channel i											
-					if (sorting_analysis[i].signal_detected[sorting_analysis[i].idx] < 
-					sorting_analysis[i].window_start[sorting_analysis[i].idx]) { // no signal was detected inside window
-						sorting_analysis[i].window_start[sorting_analysis[i].idx] = 0;
-					}
-				}
-			}
-		}
-		
+
 		__disable_irq();
 		uint16_t det_obj = g_detected_objects;
 		g_detected_objects = 0;
 		__enable_irq();
 				
 		uint8_t txBuf[2];
-		txBuf[0] = (det_obj >> 8) & 0xFF;
-		txBuf[1] = det_obj & 0xFF;
+		txBuf[0] = det_obj >> 8;	// no masking needed
+		txBuf[1] = det_obj;			// no masking needed
 		UARTWrite(txBuf, sizeof(txBuf));
 	}
-}
-
-static void SortingInfoSend() {
-	static uint32_t sorting_analysis_send_buf[ANALYSIS_PACKETS * N_CHANNELS] = { 0 };
-	int size = 0;				
-	for (int ch = 0; ch < N_CHANNELS; ++ch) {
-		const int len = sorting_analysis[ch].idx;
-		for (int i = 0; i < len; ++i) {
-			const int diff = sorting_analysis[ch].signal_detected[i] - sorting_analysis[ch].window_start[i];
-			sorting_analysis[ch].signal_detected[i] = 0;
-			sorting_analysis[ch].window_start[i] = 0;
-			sorting_analysis_send_buf[size++] = (ch << 24) | (diff & 0x00FFFFFF);
-		}
-		sorting_analysis[ch].idx = 0;
-	}
-
-	const uint32_t delim2 = 0xABCDDCBA;
-	VCP_write(&delim2, 4);
-	VCP_write(sorting_analysis_send_buf, sizeof(sorting_analysis_send_buf));
-	memset(sorting_analysis_send_buf, 0, sizeof(sorting_analysis_send_buf));
 }
 
 int main() {
@@ -594,15 +543,10 @@ int main() {
 			memset(rxBuf, 0, usb_read);
 		}
 
-		if (g_writeToPC && g_verbose_level > 0) {
+		if (g_verbose_level != 0 && g_writeToPC) {
 			const uint32_t delim1 = 0xDEADBEEF;
 			VCP_write(&delim1, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
-			static int loop_count = 0;
-			if (loop_count++ > 100) {
-				loop_count = 0;
-				SortingInfoSend();
-			}
 			g_writeToPC = 0;
 		}		
 	}
