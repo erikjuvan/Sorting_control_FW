@@ -439,6 +439,9 @@ static void Train() {
 
 __attribute__((optimize("O2"))) void AddValues(float* x) {
 	
+	if (g_verbose_level == 0)
+		return;
+	
 	static float tmp_x[N_CHANNELS] = { 0 };
 	
 	// Transfer data to temporary buffer to not corrupt the original
@@ -543,7 +546,7 @@ int main() {
 			memset(rxBuf, 0, usb_read);
 		}
 
-		if (g_verbose_level != 0 && g_writeToPC) {
+		if (g_writeToPC) {
 			const uint32_t delim1 = 0xDEADBEEF;
 			VCP_write(&delim1, 4);
 			VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
