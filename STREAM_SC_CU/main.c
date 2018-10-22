@@ -452,28 +452,34 @@ static void Train()
     g_system_trained = 1;
 }
 
+// Use union array to obide the strict aliasing rule when setting MSB bit in AddValues function
+union Float2Int {
+    uint32_t i;
+    float    f;
+};
 __attribute__((optimize("O2"))) void AddValues(float* x)
 {
     if (g_verbose_level == 0)
         return;
 
-    static float tmp_x[N_CHANNELS] = {0};
+    union Float2Int tmp_x[N_CHANNELS]; // Use union array to obide the strict aliasing rule when setting MSB bit
 
     // Transfer data to temporary buffer to not corrupt the original
-    memcpy(tmp_x, x, sizeof(tmp_x));
+    for (int i = 0; i < N_CHANNELS; ++i)
+        tmp_x[i].f = x[i];
 
     // Add trigger info encoded inside the data (set MSB bit)
     if (g_add_trigger_info) {
         for (int i = 0; i < N_CHANNELS; ++i) {
             if (g_trigger_output & (1 << i)) {
-                ((uint32_t*)tmp_x)[i] += 0x80000000; // set MSB (sign bit) bit to signal a trigger state (for PC app)
+                tmp_x[i].i += 0x80000000; // set MSB (sign bit) bit to signal a trigger state (for PC app)
             }
         }
     }
 
     // Organize data like so: ch1_0,ch1_1,ch1_2,...ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
     for (int i = 0; i < N_CHANNELS; ++i) {
-        SendBuffer[SendBuffer_alt][i * DATA_PER_CHANNEL + SendBuffer_i] = tmp_x[i];
+        SendBuffer[SendBuffer_alt][i * DATA_PER_CHANNEL + SendBuffer_i] = tmp_x[i].f;
     }
     SendBuffer_i++;
 
