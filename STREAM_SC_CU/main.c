@@ -367,6 +367,9 @@ static void USB_Init()
     USBD_RegisterClass(&USBD_Device, &USBD_CDC);
     USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_STREAM_SC_CU_fops);
     USBD_Start(&USBD_Device);
+
+    while (!g_VCPInitialized) // Make sure USB is initialized (calling, VCP_write can halt the system if the data structure hasn't been malloc-ed yet)
+        ;
 }
 
 static void USB_Deinit()
