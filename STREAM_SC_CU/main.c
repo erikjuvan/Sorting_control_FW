@@ -367,9 +367,6 @@ static void USB_Init()
     USBD_RegisterClass(&USBD_Device, &USBD_CDC);
     USBD_CDC_RegisterInterface(&USBD_Device, &USBD_CDC_STREAM_SC_CU_fops);
     USBD_Start(&USBD_Device);
-
-    while (!g_VCPInitialized) // Make sure USB is initialized (calling, VCP_write can halt the system if the data structure hasn't been malloc-ed yet)
-        ;
 }
 
 static void USB_Deinit()
@@ -566,17 +563,20 @@ int main()
     Init();
 
     while (1) {
-        usb_read = USBRead(rxBuf, sizeof(rxBuf));
-        if (usb_read > 0) {
-            Parse((char*)rxBuf, USBWrite);
-            memset(rxBuf, 0, usb_read);
-        }
 
-        if (g_writeToPC) {
-            const uint32_t delim1 = 0xDEADBEEF;
-            VCP_write(&delim1, 4);
-            VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
-            g_writeToPC = 0;
+        if (g_VCPInitialized) { // Make sure USB is initialized (calling, VCP_write can halt the system if the data structure hasn't been malloc-ed yet)
+            usb_read = USBRead(rxBuf, sizeof(rxBuf));
+            if (usb_read > 0) {
+                Parse((char*)rxBuf, USBWrite);
+                memset(rxBuf, 0, usb_read);
+            }
+
+            if (g_writeToPC) {
+                const uint32_t delim1 = 0xDEADBEEF;
+                VCP_write(&delim1, 4);
+                VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
+                g_writeToPC = 0;
+            }
         }
     }
 }
