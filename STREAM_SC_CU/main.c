@@ -572,8 +572,8 @@ int main()
             }
 
             if (g_writeToPC) {
-                const uint32_t delim1 = 0xDEADBEEF;
-                VCP_write(&delim1, 4);
+                const uint32_t delim = 0xDEADBEEF;
+                VCP_write(&delim, 4);
                 VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
                 g_writeToPC = 0;
             }
