@@ -14,6 +14,7 @@ extern int         g_add_trigger_info;
 extern int         g_timer_period;
 extern int         g_verbose_level;
 extern DisplayData g_display_data;
+extern uint32_t    g_send_buffer_size;
 
 extern float A1;
 extern float A2;
@@ -98,9 +99,10 @@ static void Function_IDGT(char* str, write_func Write)
 static void Function_SETFREQ(char* str, write_func Write)
 {
     // "CSETF,1000" - 1000 is in hertz
-    str            = strtok(NULL, Delims);
-    int val        = atoi((char*)str);
-    g_timer_period = 1e6 / val; // convert val which are hertz to period which is in us
+    str                = strtok(NULL, Delims);
+    int sample_freq    = atoi((char*)str);  // in Hz
+    g_timer_period     = 1e6 / sample_freq; // hertz to period which is in us
+    g_send_buffer_size = sample_freq / PC_SEND_FREQ;
     ChangeSampleFrequency();
 }
 

@@ -46,15 +46,18 @@ Mode g_mode = CONFIG;
 ADC_HandleTypeDef ADC1_Handle;
 DMA_HandleTypeDef DMA2_Handle;
 
+#define INITIAL_SAMPLE_FREQ 10000
+
 #define BUFFER_SIZE 2
 uint32_t Buffer[BUFFER_SIZE][N_CHANNELS] = {0};
 
-#define DATA_PER_CHANNEL 100
-#define SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
+#define SEND_BUFFER_MAX_CHANNEL_SIZE 1000 // 1000 buffer size combined with PC_SEND_FREQ of 10 Hz, allows for max sampling freq of 10 kHz.
+#define SEND_BUFFER_SIZE (N_CHANNELS * SEND_BUFFER_MAX_CHANNEL_SIZE)
 uint32_t SendBuffer_i                    = 0;
 float    SendBuffer[2][SEND_BUFFER_SIZE] = {0};
 int      SendBuffer_alt                  = 0;
 float*   pSendBuffer;
+uint32_t g_send_buffer_size = INITIAL_SAMPLE_FREQ / PC_SEND_FREQ;
 
 // GUI settable parameters
 float    A1          = 0.01;
@@ -65,7 +68,7 @@ uint32_t T_delay     = 0;
 uint32_t T_duration  = 100;
 uint32_t T_blind     = 1000;
 
-int g_timer_period  = 100;
+int g_timer_period  = 1000000 / INITIAL_SAMPLE_FREQ;
 int g_verbose_level = 0;
 
 #define VALVE_PORT GPIOD
@@ -317,7 +320,7 @@ void TIM_Configure()
     TIMx_CLK_ENALBE();
 
     TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / 1e6) - 1;
-    TIMx->ARR  = 1e2 - 1; //1e2 -1
+    TIMx->ARR  = g_timer_period - 1;
     TIMx->CR2  = TIM_CR2_MMS_1;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
@@ -404,7 +407,7 @@ static void Init()
 
 void ChangeSampleFrequency()
 {
-    TIMx->ARR = g_timer_period;
+    TIMx->ARR = g_timer_period - 1;
     TIMx->EGR = TIM_EGR_UG;
 }
 
@@ -479,11 +482,11 @@ __attribute__((optimize("O2"))) void AddValues(float* x)
 
     // Organize data like so: ch1_0,ch1_1,ch1_2,...ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
     for (int i = 0; i < N_CHANNELS; ++i) {
-        SendBuffer[SendBuffer_alt][i * DATA_PER_CHANNEL + SendBuffer_i] = tmp_x[i].f;
+        SendBuffer[SendBuffer_alt][i * g_send_buffer_size + SendBuffer_i] = tmp_x[i].f;
     }
     SendBuffer_i++;
 
-    if (SendBuffer_i >= DATA_PER_CHANNEL) {
+    if (SendBuffer_i >= g_send_buffer_size) {
         SendBuffer_i   = 0;
         pSendBuffer    = &SendBuffer[SendBuffer_alt][0];
         SendBuffer_alt = SendBuffer_alt == 0 ? 1 : 0;
@@ -524,8 +527,8 @@ __attribute__((optimize("O2"))) void Filter(float* x)
         // Feature low pass filter
         y3[i] = fabsf(y3[i]);
         y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
-	    // Square it to increase max/min ration (increase dynamic resolution)
-	    // y4[i] = y4[i] * y4[i]; // not used at the moment
+        // Square it to increase max/min ration (increase dynamic resolution)
+        // y4[i] = y4[i] * y4[i]; // not used at the moment
 
         blind_time[i] -= (blind_time[i] > 0);
 
@@ -576,7 +579,7 @@ int main()
             if (g_writeToPC) {
                 const uint32_t delim = 0xDEADBEEF;
                 VCP_write(&delim, 4);
-                VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
+                VCP_write(pSendBuffer, N_CHANNELS * g_send_buffer_size * sizeof(float));
                 g_writeToPC = 0;
             }
         }

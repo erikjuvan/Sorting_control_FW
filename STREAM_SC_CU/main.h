@@ -6,6 +6,8 @@
 #define HWVER "RK_SC_SCCUPCB V1.0.0"
 #define COMPATIBILITYMODE "CM00"
 
+#define PC_SEND_FREQ 20 // Hz
+
 typedef enum { RAW,
                TRAINED,
                FILTERED } DisplayData;
