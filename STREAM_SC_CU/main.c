@@ -524,6 +524,8 @@ __attribute__((optimize("O2"))) void Filter(float* x)
         // Feature low pass filter
         y3[i] = fabsf(y3[i]);
         y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
+	    // Square it to increase max/min ration (increase dynamic resolution)
+	    // y4[i] = y4[i] * y4[i]; // not used at the moment
 
         blind_time[i] -= (blind_time[i] > 0);
 
