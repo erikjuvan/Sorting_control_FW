@@ -519,13 +519,14 @@ __attribute__((optimize("O2"))) void Filter(float* x)
         y0[i] = (float)x[i];
         // LPF
         y1[i] = A1 * y0[i] + ((float)1.0 - A1) * y1[i];
-        //HPF
+        // HPF
         y2[i] = A2 * y1[i] + ((float)1.0 - A2) * y2[i];
-        y3[i] = y1[i] - y2[i];
-        // Feature low pass filter
-        y3[i] = fabsf(y3[i]);
+        y3[i] = y2[i] - y1[i];
+        // Feature LPF
         y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
-        // Square it to increase max/min ration (increase dynamic resolution)
+        if (y4[i] < 0)
+            y4[i] = 0; // avoid negative numbers (not to clash with frame trigger encoding)
+        // Square it to increase max/min ratio (increase dynamic resolution)
         // y4[i] = y4[i] * y4[i]; // not used at the moment
 
         blind_time[i] -= (blind_time[i] > 0);

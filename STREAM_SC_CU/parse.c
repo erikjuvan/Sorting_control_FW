@@ -194,7 +194,7 @@ static void Function_GETFREQ(char* str, write_func Write)
 static void Function_GETPARAMS(char* str, write_func Write)
 {
     char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%.2f,%.2f,%.2f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
+    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
 
     Write((uint8_t*)buf, strlen(buf));
 }
