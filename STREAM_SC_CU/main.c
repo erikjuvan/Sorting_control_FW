@@ -65,7 +65,8 @@ uint32_t T_delay     = 0;
 uint32_t T_duration  = 100;
 uint32_t T_blind     = 1000;
 
-int g_timer_period  = 100;
+#define DEFAULT_SAMPLE_FREQ 10000
+int g_timer_period  = 1e6 / DEFAULT_SAMPLE_FREQ;
 int g_verbose_level = 0;
 
 #define VALVE_PORT GPIOD
@@ -317,7 +318,7 @@ void TIM_Configure()
     TIMx_CLK_ENALBE();
 
     TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / 1e6) - 1;
-    TIMx->ARR  = 1e2 - 1; //1e2 -1
+    TIMx->ARR  = g_timer_period - 1;
     TIMx->CR2  = TIM_CR2_MMS_1;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
@@ -404,7 +405,7 @@ static void Init()
 
 void ChangeSampleFrequency()
 {
-    TIMx->ARR = g_timer_period;
+    TIMx->ARR = g_timer_period - 1;
     TIMx->EGR = TIM_EGR_UG;
 }
 
@@ -524,8 +525,8 @@ __attribute__((optimize("O2"))) void Filter(float* x)
         // Feature low pass filter
         y3[i] = fabsf(y3[i]);
         y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
-	    // Square it to increase max/min ration (increase dynamic resolution)
-	    // y4[i] = y4[i] * y4[i]; // not used at the moment
+        // Square it to increase max/min ration (increase dynamic resolution)
+        // y4[i] = y4[i] * y4[i]; // not used at the moment
 
         blind_time[i] -= (blind_time[i] > 0);
 
