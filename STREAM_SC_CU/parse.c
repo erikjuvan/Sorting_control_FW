@@ -207,6 +207,15 @@ static void Function_GETTIMES(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+static void Function_GETSETTINGS(char* str, write_func Write)
+{
+    char buf[300]; // don't need to zero it out
+    int  freq = 1e6 / g_timer_period;
+    snprintf(buf, sizeof(buf), "FREQ:%u\nTIMES:%u,%u,%u\nFILTER_PARAMS:%.3f,%.3f,%.3f,%.1f\n", freq, T_delay, T_duration, T_blind, A1, A2, A4, FTR_THRSHLD);
+
+    Write((uint8_t*)buf, strlen(buf));
+}
+
 #define COMMAND(NAME)          \
     {                          \
 #NAME, Function_##NAME \
@@ -235,6 +244,7 @@ static struct {
     COMMAND(GETTIMES),
     COMMAND(GETVIEW),
     COMMAND(GETTRGFRM),
+    COMMAND(GETSETTINGS),
 
     COMMAND(SETFREQ),
     COMMAND(SETPARAMS),

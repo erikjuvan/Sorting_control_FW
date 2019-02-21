@@ -57,13 +57,13 @@ int      SendBuffer_alt                  = 0;
 float*   pSendBuffer;
 
 // GUI settable parameters
-float    A1          = 0.01;
-float    A2          = 0.03;
-float    A4          = 0.03;
-float    FTR_THRSHLD = 7.0;
+float    A1          = 0.f;
+float    A2          = 0.f;
+float    A4          = 0.f;
+float    FTR_THRSHLD = 0.f;
 uint32_t T_delay     = 0;
-uint32_t T_duration  = 100;
-uint32_t T_blind     = 1000;
+uint32_t T_duration  = 0;
+uint32_t T_blind     = 0;
 
 #define DEFAULT_SAMPLE_FREQ 10000
 int g_timer_period  = 1e6 / DEFAULT_SAMPLE_FREQ;
@@ -77,7 +77,7 @@ uint16_t g_Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PI
 int32_t g_duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 int32_t g_delay_timer[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
 
-DisplayData g_display_data = RAW;
+DisplayData g_display_data = FILTERED; // default
 uint8_t     g_writeToPC    = 0;
 
 uint16_t g_trigger_output   = 0;
