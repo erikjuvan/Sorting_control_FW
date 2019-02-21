@@ -38,8 +38,22 @@ extern CommunicationInterface g_communication_interface;
 //#define	DEBUG_TIM
 //#define	STOPWATCH
 
-void AddValues(float* x);
-void Filter(float* x);
+static void Filter(uint32_t* x);
+
+typedef union {
+    uint64_t u64;
+    struct {
+        uint32_t raw_data : 31;
+        uint32_t ejection_window : 1;
+        uint32_t undef : 31;
+        uint32_t object_detected : 1;
+    } u32;
+
+    struct {
+        float undef;
+        float filtered_data_w_obj_det;
+    } f32;
+} ProtocolDataType;
 
 Mode g_mode = CONFIG;
 
@@ -47,14 +61,14 @@ ADC_HandleTypeDef ADC1_Handle;
 DMA_HandleTypeDef DMA2_Handle;
 
 #define BUFFER_SIZE 2
-uint32_t Buffer[BUFFER_SIZE][N_CHANNELS] = {0};
+uint32_t buffer[BUFFER_SIZE][N_CHANNELS] = {0};
 
 #define DATA_PER_CHANNEL 100
 #define SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
-uint32_t SendBuffer_i                    = 0;
-float    SendBuffer[2][SEND_BUFFER_SIZE] = {0};
-int      SendBuffer_alt                  = 0;
-float*   pSendBuffer;
+uint32_t          send_buffer_i                    = 0;
+int               send_buffer_alt                  = 0;
+ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0};
+ProtocolDataType* p_send_buffer;
 
 // GUI settable parameters
 float    A1          = 0.f;
@@ -77,17 +91,14 @@ uint16_t g_Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PI
 int32_t g_duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 int32_t g_delay_timer[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
 
-DisplayData g_display_data = FILTERED; // default
-uint8_t     g_writeToPC    = 0;
+uint8_t g_writeToPC = 0;
 
-uint16_t g_trigger_output   = 0;
+uint16_t g_ejection_window  = 0;
 uint16_t g_detected_objects = 0;
 
 int   g_system_trained = 0;
 int   g_training       = 0;
 float g_trained_coeffs[N_CHANNELS];
-
-int g_add_trigger_info = 0;
 
 // IRQ
 /////////////////////////////////////
@@ -116,33 +127,19 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
     GPIOA->BSRR = GPIO_PIN_8 << 16;
 #endif
 
-    float fBuf[N_CHANNELS];
+    uint32_t buf[N_CHANNELS];
 
     if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
         DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
         for (int i = 0; i < N_CHANNELS; ++i)
-            fBuf[i] = (float)Buffer[0][i];
+            buf[i] = buffer[0][i];
     } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
         DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
         for (int i = 0; i < N_CHANNELS; ++i)
-            fBuf[i] = (float)Buffer[BUFFER_SIZE / 2][i];
+            buf[i] = buffer[BUFFER_SIZE / 2][i];
     }
 
-    if (g_display_data == FILTERED) {
-        if (g_system_trained) { // small optimization to not run the for loop if system was never trained
-            for (int i = 0; i < N_CHANNELS; ++i) {
-                fBuf[i] *= g_trained_coeffs[i];
-            }
-        }
-        Filter(fBuf);
-    } else if (g_display_data == RAW) {
-        AddValues(fBuf);
-    } else if (g_display_data == TRAINED) {
-        for (int i = 0; i < N_CHANNELS; ++i) {
-            fBuf[i] *= g_trained_coeffs[i];
-        }
-        AddValues(fBuf);
-    }
+    Filter(buf);
 
     for (int i = 0; i < N_CHANNELS; ++i) {
         if (g_delay_timer[i] >= 0) {
@@ -398,7 +395,7 @@ static void Init()
     for (int i = 0; i < N_CHANNELS; ++i)
         g_trained_coeffs[i] = 1.0;
 
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 
     USB_Init();
 }
@@ -448,75 +445,63 @@ static void Train()
 
     HAL_ADC_Stop(&ADC1_Handle);
     ADC_Configure();
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&Buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 
     g_system_trained = 1;
 }
 
-// Use union array to obide the strict aliasing rule when setting MSB bit in AddValues function
-union Float2Int {
-    uint32_t i;
-    float    f;
-};
-__attribute__((optimize("O2"))) void AddValues(float* x)
+static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float* filtered_data)
 {
     if (g_verbose_level == 0)
         return;
 
-    union Float2Int tmp_x[N_CHANNELS]; // Use union array to obide the strict aliasing rule when setting MSB bit
+    ProtocolDataType data[N_CHANNELS]; // doesn't need to be zero initialized
 
-    // Transfer data to temporary buffer to not corrupt the original
-    for (int i = 0; i < N_CHANNELS; ++i)
-        tmp_x[i].f = x[i];
-
-    // Add trigger info encoded inside the data (set MSB bit)
-    if (g_add_trigger_info) {
-        for (int i = 0; i < N_CHANNELS; ++i) {
-            if (g_trigger_output & (1 << i)) {
-                tmp_x[i].i += 0x80000000; // set MSB (sign bit) bit to signal a trigger state (for PC app)
-            }
-        }
-    }
-
-    // Organize data like so: ch1_0,ch1_1,ch1_2,...ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
+    // Encode data
     for (int i = 0; i < N_CHANNELS; ++i) {
-        SendBuffer[SendBuffer_alt][i * DATA_PER_CHANNEL + SendBuffer_i] = tmp_x[i].f;
-    }
-    SendBuffer_i++;
+        // Add raw data
+        data[i].i32.raw_data = raw_data[i];
+        // Add ejection window info
+        data[i].i32.ejection_window = (g_ejection_window & (1 << i)) != 0;
+        // Add filtered data
+        data[i].f32.filtered_data = filtered_data[i];
+        // Add object detected
+        data[i].i32.object_detected = (g_detected_objects & (1 << i)) != 0;
 
-    if (SendBuffer_i >= DATA_PER_CHANNEL) {
-        SendBuffer_i   = 0;
-        pSendBuffer    = &SendBuffer[SendBuffer_alt][0];
-        SendBuffer_alt = SendBuffer_alt == 0 ? 1 : 0;
-        g_writeToPC    = 1;
+        // Add data to sending buffer
+        // Organize data like so: ch1_0,ch1_1,...,ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
+        send_buffer[send_buffer_alt][i * DATA_PER_CHANNEL + send_buffer_i] = data[i];
+    }
+    send_buffer_i++;
+
+    if (send_buffer_i >= DATA_PER_CHANNEL) {
+        send_buffer_i   = 0;
+        p_send_buffer   = &send_buffer[send_buffer_alt][0];
+        send_buffer_alt = send_buffer_alt == 0 ? 1 : 0;
+        g_writeToPC     = 1;
     }
 }
 
-__attribute__((optimize("O2"))) void ObjectDetected(int ch)
+static __attribute__((optimize("O2"))) void ObjectDetected(int ch)
 {
-    if ((1 << ch) & g_trigger_output) {
+    if ((1 << ch) & g_ejection_window)
         g_delay_timer[ch] = T_delay;
-    }
 
     g_detected_objects |= 1 << ch;
 }
 
-__attribute__((optimize("O2"))) void Filter(float* x)
+static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
 {
-    /*
-	1.stage: LPF
-	y[i] = a * x[i] + (1 - a) * y[i - 1]
-	2.stage: HPf
-	u[i] = a * x[i] + (1 - a) * u[i - 1]
-	y[i] = x[i] - u[i]
-	3.stage: Feature integration implemented with a LPF
-	y[i] = a * abs(x[i]) + (1 - a) * y[i - 1]
-	*/
     static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
     static int   blind_time[N_CHANNELS] = {0};
 
+    // if system is trained
+    if (g_system_trained)
+        for (int i = 0; i < N_CHANNELS; ++i)
+            y0[i] *= g_trained_coeffs[i];
+
     for (int i = 0; i < N_CHANNELS; i++) {
-        y0[i] = (float)x[i];
+        y0[i] = (float)raw_data[i];
         // LPF
         y1[i] = A1 * y0[i] + ((float)1.0 - A1) * y1[i];
         // HPF
@@ -537,7 +522,7 @@ __attribute__((optimize("O2"))) void Filter(float* x)
         }
     }
 
-    AddValues(y4);
+    AddValues(raw_data, y4);
 }
 
 void COM_UART_RX_Complete_Callback(uint8_t* buf, int size)
@@ -545,7 +530,7 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size)
     if (g_mode == CONFIG) { // Config mode
         Parse((char*)buf, UARTWrite);
     } else if (g_mode == SORT) { // Sorting mode
-        g_trigger_output = ((uint16_t)buf[0] << 8) | buf[1];
+        g_ejection_window = ((uint16_t)buf[0] << 8) | buf[1];
 
         __disable_irq();
         uint16_t det_obj   = g_detected_objects;
@@ -578,7 +563,7 @@ int main()
             if (g_writeToPC) {
                 const uint32_t delim = 0xDEADBEEF;
                 VCP_write(&delim, 4);
-                VCP_write(pSendBuffer, SEND_BUFFER_SIZE * sizeof(float));
+                VCP_write(p_send_buffer, SEND_BUFFER_SIZE * sizeof(ProtocolDataType));
                 g_writeToPC = 0;
             }
         }

@@ -9,11 +9,9 @@
 extern Mode                   g_mode;
 extern CommunicationInterface g_communication_interface;
 
-extern int         g_training;
-extern int         g_add_trigger_info;
-extern int         g_timer_period;
-extern int         g_verbose_level;
-extern DisplayData g_display_data;
+extern int g_training;
+extern int g_timer_period;
+extern int g_verbose_level;
 
 extern float A1;
 extern float A2;
@@ -95,9 +93,9 @@ static void Function_IDGT(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+// "CSETF,1000" - 1000 is in hertz
 static void Function_SETFREQ(char* str, write_func Write)
 {
-    // "CSETF,1000" - 1000 is in hertz
     str            = strtok(NULL, Delims);
     int val        = atoi((char*)str);
     g_timer_period = 1e6 / val; // convert val which are hertz to period which is in us
@@ -112,29 +110,6 @@ static void Function_RESET(char* str, write_func Write)
 static void Function_TRAIN(char* str, write_func Write)
 {
     // Not currently supported
-}
-
-static void Function_RAW(char* str, write_func Write)
-{
-    g_display_data = RAW;
-}
-
-static void Function_TRAINED(char* str, write_func Write)
-{
-    g_display_data = TRAINED;
-}
-
-static void Function_FILTERED(char* str, write_func Write)
-{
-    g_display_data = FILTERED;
-}
-
-static void Function_GETVIEW(char* str, write_func Write)
-{
-    char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "%u\n", g_display_data);
-
-    Write((uint8_t*)buf, strlen(buf));
 }
 
 static void Function_SETPARAMS(char* str, write_func Write)
@@ -162,24 +137,6 @@ static void Function_SETTIMES(char* str, write_func Write)
 static void Function_PING(char* str, write_func Write)
 {
     Write((uint8_t*)"OK\n", 2);
-}
-
-static void Function_SETTRGFRM(char* str, write_func Write)
-{
-    str     = strtok(NULL, Delims);
-    int set = atoi((char*)str);
-    if (set != 0)
-        g_add_trigger_info = 1;
-    else
-        g_add_trigger_info = 0;
-}
-
-static void Function_GETTRGFRM(char* str, write_func Write)
-{
-    char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "%u\n", g_add_trigger_info);
-
-    Write((uint8_t*)buf, strlen(buf));
 }
 
 static void Function_GETFREQ(char* str, write_func Write)
@@ -242,17 +199,11 @@ static struct {
     COMMAND(GETFREQ),
     COMMAND(GETPARAMS),
     COMMAND(GETTIMES),
-    COMMAND(GETVIEW),
-    COMMAND(GETTRGFRM),
     COMMAND(GETSETTINGS),
 
     COMMAND(SETFREQ),
     COMMAND(SETPARAMS),
     COMMAND(SETTIMES),
-    COMMAND(RAW),
-    COMMAND(TRAINED),
-    COMMAND(FILTERED),
-    COMMAND(SETTRGFRM),
 };
 
 void Parse(char* string, write_func Write)

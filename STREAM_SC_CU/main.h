@@ -6,8 +6,5 @@
 #define HWVER "RK_SC_SCCUPCB V1.0.0"
 #define COMPATIBILITYMODE "CM00"
 
-typedef enum { RAW,
-               TRAINED,
-               FILTERED } DisplayData;
 typedef enum { SORT,
                CONFIG } Mode;
