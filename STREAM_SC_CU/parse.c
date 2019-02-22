@@ -96,10 +96,12 @@ static void Function_IDGT(char* str, write_func Write)
 // "CSETF,1000" - 1000 is in hertz
 static void Function_SETFREQ(char* str, write_func Write)
 {
-    str            = strtok(NULL, Delims);
-    int val        = atoi((char*)str);
-    g_timer_period = 1e6 / val; // convert val which are hertz to period which is in us
-    ChangeSampleFrequency();
+    str     = strtok(NULL, Delims);
+    int val = atoi((char*)str);
+    if (val > 0) {
+        g_timer_period = 1e6 / val; // convert val which are hertz to period which is in us
+        ChangeSampleFrequency();
+    }
 }
 
 static void Function_RESET(char* str, write_func Write)
@@ -142,8 +144,11 @@ static void Function_PING(char* str, write_func Write)
 static void Function_GETFREQ(char* str, write_func Write)
 {
     char buf[10] = {0};
-    int  hz      = 1e6 / g_timer_period;
-    snprintf(buf, sizeof(buf), "%u\n", hz);
+    int  freq_hz = 0;
+    if (g_timer_period > 0)
+        freq_hz = 1e6 / g_timer_period;
+
+    snprintf(buf, sizeof(buf), "%u\n", freq_hz);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -167,8 +172,10 @@ static void Function_GETTIMES(char* str, write_func Write)
 static void Function_GETSETTINGS(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
-    int  freq = 1e6 / g_timer_period;
-    snprintf(buf, sizeof(buf), "FREQ:%u\nTIMES:%u,%u,%u\nFILTER_PARAMS:%.3f,%.3f,%.3f,%.1f\n", freq, T_delay, T_duration, T_blind, A1, A2, A4, FTR_THRSHLD);
+    int  freq_hz = 0;
+    if (g_timer_period > 0)
+        freq_hz = 1e6 / g_timer_period;
+    snprintf(buf, sizeof(buf), "FREQ:%u\nTIMES:%u,%u,%u\nFILTER_PARAMS:%.3f,%.3f,%.3f,%.1f\n", freq_hz, T_delay, T_duration, T_blind, A1, A2, A4, FTR_THRSHLD);
 
     Write((uint8_t*)buf, strlen(buf));
 }

@@ -85,8 +85,8 @@ uint32_t T_delay     = 0;
 uint32_t T_duration  = 0;
 uint32_t T_blind     = 0;
 
-#define DEFAULT_SAMPLE_FREQ 10000
-int g_timer_period  = 1e6 / DEFAULT_SAMPLE_FREQ;
+uint32_t g_timer_period = 0;
+
 int g_verbose_level = 0;
 
 #define VALVE_PORT GPIOD
@@ -512,7 +512,7 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
         // Feature LPF
         y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
         if (y4[i] < 0)
-            y4[i] = 0; // avoid negative numbers (not to clash with frame trigger encoding)
+            y4[i] = 0; // avoid negative numbers (not to clash with object detection encoding)
         // Square it to increase max/min ratio (increase dynamic resolution)
         // y4[i] = y4[i] * y4[i]; // not used at the moment
 
