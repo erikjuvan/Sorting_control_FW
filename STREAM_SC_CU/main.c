@@ -461,9 +461,6 @@ static void Train()
 
 static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float* filtered_data)
 {
-    if (g_verbose_level == 0)
-        return;
-
     ProtocolDataType data[N_CHANNELS]; // doesn't need to be zero initialized
 
     // Encode data
@@ -486,7 +483,7 @@ static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float*
     if (send_buffer_i >= DATA_PER_CHANNEL) {
         send_buffer_i   = 0;
         p_send_buffer   = &send_buffer[send_buffer_alt][0];
-        send_buffer_alt = send_buffer_alt == 0 ? 1 : 0;
+        send_buffer_alt = send_buffer_alt ? 0 : 1;
         ++header.packet_id;
         g_writeToPC = 1;
     }
@@ -504,11 +501,6 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
 {
     static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
     static int   blind_time[N_CHANNELS] = {0};
-
-    // if system is trained
-    if (g_system_trained)
-        for (int i = 0; i < N_CHANNELS; ++i)
-            y0[i] *= g_trained_coeffs[i];
 
     for (int i = 0; i < N_CHANNELS; i++) {
         y0[i] = (float)raw_data[i];
@@ -532,7 +524,8 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
         }
     }
 
-    AddValues(raw_data, y4);
+    if (g_verbose_level != 0)
+        AddValues(raw_data, y4);
 }
 
 void COM_UART_RX_Complete_Callback(uint8_t* buf, int size)
