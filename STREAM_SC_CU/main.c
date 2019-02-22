@@ -55,6 +55,11 @@ typedef union {
     } f32;
 } ProtocolDataType;
 
+typedef struct {
+    const uint32_t delim;
+    uint32_t       packet_id;
+} Header;
+
 Mode g_mode = CONFIG;
 
 ADC_HandleTypeDef ADC1_Handle;
@@ -69,6 +74,7 @@ uint32_t          send_buffer_i                    = 0;
 int               send_buffer_alt                  = 0;
 ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0};
 ProtocolDataType* p_send_buffer;
+Header            header = {0xDEADBEEF, 0};
 
 // GUI settable parameters
 float    A1          = 0.f;
@@ -395,6 +401,9 @@ static void Init()
     for (int i = 0; i < N_CHANNELS; ++i)
         g_trained_coeffs[i] = 1.0;
 
+    // reset counter just to be sure it's 0 at start
+    header.packet_id = 0;
+
     HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
 
     USB_Init();
@@ -460,13 +469,13 @@ static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float*
     // Encode data
     for (int i = 0; i < N_CHANNELS; ++i) {
         // Add raw data
-        data[i].i32.raw_data = raw_data[i];
+        data[i].u32.raw_data = raw_data[i];
         // Add ejection window info
-        data[i].i32.ejection_window = (g_ejection_window & (1 << i)) != 0;
+        data[i].u32.ejection_window = (g_ejection_window & (1 << i)) != 0;
         // Add filtered data
-        data[i].f32.filtered_data = filtered_data[i];
+        data[i].f32.filtered_data_w_obj_det = filtered_data[i];
         // Add object detected
-        data[i].i32.object_detected = (g_detected_objects & (1 << i)) != 0;
+        data[i].u32.object_detected = (g_detected_objects & (1 << i)) != 0;
 
         // Add data to sending buffer
         // Organize data like so: ch1_0,ch1_1,...,ch1_DATA_PER_CHANNEL, ch2_0, ch2_1, ... chN_DATA_PER_CHANNEL.
@@ -478,7 +487,8 @@ static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float*
         send_buffer_i   = 0;
         p_send_buffer   = &send_buffer[send_buffer_alt][0];
         send_buffer_alt = send_buffer_alt == 0 ? 1 : 0;
-        g_writeToPC     = 1;
+        ++header.packet_id;
+        g_writeToPC = 1;
     }
 }
 
@@ -561,8 +571,7 @@ int main()
             }
 
             if (g_writeToPC) {
-                const uint32_t delim = 0xDEADBEEF;
-                VCP_write(&delim, 4);
+                VCP_write(&header, sizeof(header));
                 VCP_write(p_send_buffer, SEND_BUFFER_SIZE * sizeof(ProtocolDataType));
                 g_writeToPC = 0;
             }

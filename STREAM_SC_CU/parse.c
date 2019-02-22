@@ -203,8 +203,7 @@ static struct {
 
     COMMAND(SETFREQ),
     COMMAND(SETPARAMS),
-    COMMAND(SETTIMES),
-};
+    COMMAND(SETTIMES)};
 
 void Parse(char* string, write_func Write)
 {
