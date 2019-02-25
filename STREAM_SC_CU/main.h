@@ -8,3 +8,8 @@
 
 typedef enum { SORT,
                CONFIG } Mode;
+
+typedef struct {
+    const uint32_t delim;
+    uint32_t       packet_id;
+} Header;

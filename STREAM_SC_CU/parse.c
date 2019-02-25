@@ -9,6 +9,8 @@
 extern Mode                   g_mode;
 extern CommunicationInterface g_communication_interface;
 
+extern Header header;
+
 extern int g_training;
 extern int g_timer_period;
 extern int g_verbose_level;
@@ -64,6 +66,10 @@ static void Function_VRBS(char* str, write_func Write)
 {
     str             = strtok(NULL, Delims);
     g_verbose_level = atoi((char*)str);
+
+    // Reset packet ID when entering verbose mode
+    if (g_verbose_level != 0)
+        header.packet_id = 0;
 }
 
 static void Function_VRBG(char* str, write_func Write)

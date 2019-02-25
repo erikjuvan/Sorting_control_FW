@@ -12,6 +12,21 @@
 #include "parse.h"
 #include "uart.h"
 
+typedef union {
+    uint64_t u64;
+    struct {
+        uint32_t raw_data : 31;
+        uint32_t ejection_window : 1;
+        uint32_t undef : 31;
+        uint32_t object_detected : 1;
+    } u32;
+
+    struct {
+        float undef;
+        float filtered_data_w_obj_det;
+    } f32;
+} ProtocolDataType;
+
 USBD_HandleTypeDef       USBD_Device;
 void                     SysTick_Handler(void);
 void                     OTG_FS_IRQHandler(void);
@@ -39,26 +54,6 @@ extern CommunicationInterface g_communication_interface;
 //#define	STOPWATCH
 
 static void Filter(uint32_t* x);
-
-typedef union {
-    uint64_t u64;
-    struct {
-        uint32_t raw_data : 31;
-        uint32_t ejection_window : 1;
-        uint32_t undef : 31;
-        uint32_t object_detected : 1;
-    } u32;
-
-    struct {
-        float undef;
-        float filtered_data_w_obj_det;
-    } f32;
-} ProtocolDataType;
-
-typedef struct {
-    const uint32_t delim;
-    uint32_t       packet_id;
-} Header;
 
 Mode g_mode = CONFIG;
 
