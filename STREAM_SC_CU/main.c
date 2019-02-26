@@ -71,16 +71,26 @@ ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0};
 ProtocolDataType* p_send_buffer;
 Header            header = {0xDEADBEEF, 0};
 
-// GUI settable parameters
-float    A1          = 0.f;
-float    A2          = 0.f;
-float    A4          = 0.f;
-float    FTR_THRSHLD = 0.f;
-uint32_t T_delay     = 0;
-uint32_t T_duration  = 0;
-uint32_t T_blind     = 0;
+// Filter parameters
+float A1        = 0.f;
+float A2        = 0.f;
+float A4        = 0.f;
+float THRESHOLD = 0.f;
 
-uint32_t g_timer_period = 0;
+// Sorting parameters
+// NOTE! - units are ticks NOT time units e.g. ms
+// So e.g. g_delay_ticks_param = 100 -> that means 100 ticks which is 100 * T = 100 * 1/sample_freq.
+// Example: if sample_freq=5 kHz then g_delay_ticks_param takes 100 * 1 / 5000 = 20 ms
+uint32_t g_delay_ticks_param    = 0;
+uint32_t g_duration_ticks_param = 0;
+uint32_t g_blind_ticks_param    = 0;
+
+// Ticker counters
+int32_t g_delay_ticker[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
+int32_t g_duration_ticker[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
+
+// Trigger DMA IRQ when TIM counter reaches bottom variable
+uint32_t g_sample_every_N_counts = 0;
 
 int g_verbose_level = 0;
 
@@ -88,9 +98,6 @@ int g_verbose_level = 0;
 #define VALVE_PINS (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
 #define VALVE_CLK_ENABLE __GPIOD_CLK_ENABLE
 uint16_t g_Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
-
-int32_t g_duration_timer[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
-int32_t g_delay_timer[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
 
 uint8_t g_writeToPC = 0;
 
@@ -143,15 +150,15 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
     Filter(buf);
 
     for (int i = 0; i < N_CHANNELS; ++i) {
-        if (g_delay_timer[i] >= 0) {
-            if (g_delay_timer[i]-- == 0) {
-                VALVE_PORT->BSRR    = g_Valve_Pins[i];
-                g_duration_timer[i] = T_duration;
+        if (g_delay_ticker[i] >= 0) {
+            if (g_delay_ticker[i]-- == 0) {
+                VALVE_PORT->BSRR     = g_Valve_Pins[i];
+                g_duration_ticker[i] = g_duration_ticks_param;
             }
         }
 
-        if (g_duration_timer[i] >= 0) {
-            if (g_duration_timer[i]-- == 0) {
+        if (g_duration_ticker[i] >= 0) {
+            if (g_duration_ticker[i]-- == 0) {
                 VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
             }
         }
@@ -315,8 +322,8 @@ void TIM_Configure()
 {
     TIMx_CLK_ENALBE();
 
-    TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / 1e6) - 1;
-    TIMx->ARR  = g_timer_period - 1;
+    TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / TIM_COUNT_FREQ) - 1; // Set prescaler to count with 1 us period
+    TIMx->ARR  = g_sample_every_N_counts - 1;
     TIMx->CR2  = TIM_CR2_MMS_1;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
@@ -406,7 +413,7 @@ static void Init()
 
 void ChangeSampleFrequency()
 {
-    TIMx->ARR = g_timer_period - 1;
+    TIMx->ARR = g_sample_every_N_counts - 1;
     TIMx->EGR = TIM_EGR_UG;
 }
 
@@ -487,7 +494,7 @@ static __attribute__((optimize("O2"))) void AddValues(uint32_t* raw_data, float*
 static __attribute__((optimize("O2"))) void ObjectDetected(int ch)
 {
     if ((1 << ch) & g_ejection_window)
-        g_delay_timer[ch] = T_delay;
+        g_delay_ticker[ch] = g_delay_ticks_param;
 
     g_detected_objects |= 1 << ch;
 }
@@ -495,7 +502,7 @@ static __attribute__((optimize("O2"))) void ObjectDetected(int ch)
 static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
 {
     static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
-    static int   blind_time[N_CHANNELS] = {0};
+    static int   blind_ticker[N_CHANNELS] = {0};
 
     for (int i = 0; i < N_CHANNELS; i++) {
         y0[i] = (float)raw_data[i];
@@ -511,10 +518,10 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
         // Square it to increase max/min ratio (increase dynamic resolution)
         // y4[i] = y4[i] * y4[i]; // not used at the moment
 
-        blind_time[i] -= (blind_time[i] > 0);
+        blind_ticker[i] -= (blind_ticker[i] > 0);
 
-        if (y4[i] > FTR_THRSHLD && blind_time[i] <= 0) {
-            blind_time[i] = T_blind;
+        if (y4[i] > THRESHOLD && blind_ticker[i] <= 0) {
+            blind_ticker[i] = g_blind_ticks_param;
             ObjectDetected(i);
         }
     }
