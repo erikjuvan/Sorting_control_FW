@@ -12,17 +12,17 @@ extern CommunicationInterface g_communication_interface;
 extern Header header;
 
 extern int g_training;
-extern int g_timer_period;
+extern int g_sample_every_N_counts;
 extern int g_verbose_level;
 
 extern float A1;
 extern float A2;
 extern float A4;
-extern float FTR_THRSHLD;
+extern float THRESHOLD;
 
-extern uint32_t T_delay;
-extern uint32_t T_duration;
-extern uint32_t T_blind;
+extern uint32_t g_delay_ticks_param;
+extern uint32_t g_duration_ticks_param;
+extern uint32_t g_blind_ticks_param;
 
 extern void ChangeSampleFrequency();
 
@@ -99,17 +99,6 @@ static void Function_IDGT(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
-// "CSETF,1000" - 1000 is in hertz
-static void Function_SETFREQ(char* str, write_func Write)
-{
-    str     = strtok(NULL, Delims);
-    int val = atoi((char*)str);
-    if (val > 0) {
-        g_timer_period = 1e6 / val; // convert val which are hertz to period which is in us
-        ChangeSampleFrequency();
-    }
-}
-
 static void Function_RESET(char* str, write_func Write)
 {
     NVIC_SystemReset();
@@ -120,26 +109,37 @@ static void Function_TRAIN(char* str, write_func Write)
     // Not currently supported
 }
 
-static void Function_SETPARAMS(char* str, write_func Write)
+// "CSETF,1000" - 1000 is in hertz
+static void Function_SETFREQ(char* str, write_func Write)
 {
-    str         = strtok(NULL, ",");
-    A1          = atof(str);
-    str         = strtok(NULL, ",");
-    A2          = atof(str);
-    str         = strtok(NULL, ",");
-    A4          = atof(str);
-    str         = strtok(NULL, Delims);
-    FTR_THRSHLD = atof(str);
+    str                          = strtok(NULL, Delims);
+    int requested_sample_freq_hz = atoi((char*)str);
+    if (requested_sample_freq_hz > 0) {
+        g_sample_every_N_counts = TIM_COUNT_FREQ / requested_sample_freq_hz; // convert val which are hertz to period which is in us
+        ChangeSampleFrequency();
+    }
 }
 
-static void Function_SETTIMES(char* str, write_func Write)
+static void Function_SETSORTTICKS(char* str, write_func Write)
 {
-    str        = strtok(NULL, ",");
-    T_delay    = atoi(str);
-    str        = strtok(NULL, ",");
-    T_duration = atoi(str);
-    str        = strtok(NULL, Delims);
-    T_blind    = atoi(str);
+    str                    = strtok(NULL, ",");
+    g_delay_ticks_param    = atoi(str);
+    str                    = strtok(NULL, ",");
+    g_duration_ticks_param = atoi(str);
+    str                    = strtok(NULL, Delims);
+    g_blind_ticks_param    = atoi(str);
+}
+
+static void Function_SETFILTERCOEFF(char* str, write_func Write)
+{
+    str       = strtok(NULL, ",");
+    A1        = atof(str);
+    str       = strtok(NULL, ",");
+    A2        = atof(str);
+    str       = strtok(NULL, ",");
+    A4        = atof(str);
+    str       = strtok(NULL, Delims);
+    THRESHOLD = atof(str);
 }
 
 static void Function_PING(char* str, write_func Write)
@@ -149,28 +149,28 @@ static void Function_PING(char* str, write_func Write)
 
 static void Function_GETFREQ(char* str, write_func Write)
 {
-    char buf[10] = {0};
-    int  freq_hz = 0;
-    if (g_timer_period > 0)
-        freq_hz = 1e6 / g_timer_period;
+    char buf[10]        = {0};
+    int  sample_freq_hz = 0;
+    if (g_sample_every_N_counts > 0)
+        sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
 
-    snprintf(buf, sizeof(buf), "%u\n", freq_hz);
-
-    Write((uint8_t*)buf, strlen(buf));
-}
-
-static void Function_GETPARAMS(char* str, write_func Write)
-{
-    char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f,%.1f\n", A1, A2, A4, FTR_THRSHLD);
+    snprintf(buf, sizeof(buf), "%u\n", sample_freq_hz);
 
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETTIMES(char* str, write_func Write)
+static void Function_GETSORTTICKS(char* str, write_func Write)
 {
     char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%u,%u,%u\n", T_delay, T_duration, T_blind);
+    snprintf(buf, sizeof(buf), "%u,%u,%u\n", g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param);
+
+    Write((uint8_t*)buf, strlen(buf));
+}
+
+static void Function_GETFILTERCOEFF(char* str, write_func Write)
+{
+    char buf[50] = {0};
+    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f,%.1f\n", A1, A2, A4, THRESHOLD);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -178,10 +178,10 @@ static void Function_GETTIMES(char* str, write_func Write)
 static void Function_GETSETTINGS(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
-    int  freq_hz = 0;
-    if (g_timer_period > 0)
-        freq_hz = 1e6 / g_timer_period;
-    snprintf(buf, sizeof(buf), "FREQ:%u\nTIMES:%u,%u,%u\nFILTER_PARAMS:%.3f,%.3f,%.3f,%.1f\n", freq_hz, T_delay, T_duration, T_blind, A1, A2, A4, FTR_THRSHLD);
+    int  sample_freq_hz = 0;
+    if (g_sample_every_N_counts > 0)
+        sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
+    snprintf(buf, sizeof(buf), "FREQ:%u\nSORT_TICKS:%u,%u,%u\nFILTER_COEFF:%.3f,%.3f,%.3f,%.1f\n", sample_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, A1, A2, A4, THRESHOLD);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -210,13 +210,13 @@ static struct {
     COMMAND(TRAIN),
 
     COMMAND(GETFREQ),
-    COMMAND(GETPARAMS),
-    COMMAND(GETTIMES),
+    COMMAND(GETSORTTICKS),
+    COMMAND(GETFILTERCOEFF),
     COMMAND(GETSETTINGS),
 
     COMMAND(SETFREQ),
-    COMMAND(SETPARAMS),
-    COMMAND(SETTIMES)};
+    COMMAND(SETSORTTICKS),
+    COMMAND(SETFILTERCOEFF)};
 
 void Parse(char* string, write_func Write)
 {
