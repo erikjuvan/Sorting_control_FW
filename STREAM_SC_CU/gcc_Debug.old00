@@ -1379,12 +1379,12 @@
 
 // --- Include directories begin --- //
 //.
-//$(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc
-//$(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc/Legacy
-//$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Device/ST/STM32F7xx/Include
-//$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Include
-//$(BSP_ROOT)/STM32_USB_Device_Library/Core/Inc
-//$(BSP_ROOT)/STM32_USB_Device_Library/Class/CDC/Inc
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc/Legacy
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32F7xxxx/CMSIS_HAL/Device/ST/STM32F7xx/Include
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32F7xxxx/CMSIS_HAL/Include
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32_USB_Device_Library/Core/Inc
+//$(LOCALAPPDATA)\VisualGDB\EmbeddedBSPs\arm-eabi\com.sysprogs.arm.stm32/STM32_USB_Device_Library/Class/CDC/Inc
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\arm-eabi\thumb\fpu\cortex_m7
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\backward
