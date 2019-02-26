@@ -71,12 +71,6 @@ ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0};
 ProtocolDataType* p_send_buffer;
 Header            header = {0xDEADBEEF, 0};
 
-// Filter parameters
-float A1        = 0.f;
-float A2        = 0.f;
-float A4        = 0.f;
-float THRESHOLD = 0.f;
-
 // Sorting parameters
 // NOTE! - units are ticks NOT time units e.g. ms
 // So e.g. g_delay_ticks_param = 100 -> that means 100 ticks which is 100 * T = 100 * 1/sample_freq.
@@ -84,6 +78,14 @@ float THRESHOLD = 0.f;
 uint32_t g_delay_ticks_param    = 0;
 uint32_t g_duration_ticks_param = 0;
 uint32_t g_blind_ticks_param    = 0;
+
+// Filter coefficients
+float g_lpf1_K = 0.f;
+float g_hpf_K  = 0.f;
+float g_lpf2_K = 0.f;
+
+// Detection threshold
+float g_threshold = 0.f;
 
 // Ticker counters
 int32_t g_delay_ticker[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
@@ -507,12 +509,12 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
     for (int i = 0; i < N_CHANNELS; i++) {
         y0[i] = (float)raw_data[i];
         // LPF
-        y1[i] = A1 * y0[i] + ((float)1.0 - A1) * y1[i];
+        y1[i] = g_lpf1_K * y0[i] + ((float)1.0 - g_lpf1_K) * y1[i];
         // HPF
-        y2[i] = A2 * y1[i] + ((float)1.0 - A2) * y2[i];
+        y2[i] = g_hpf_K * y1[i] + ((float)1.0 - g_hpf_K) * y2[i];
         y3[i] = y2[i] - y1[i];
         // Feature LPF
-        y4[i] = A4 * y3[i] + ((float)1.0 - A4) * y4[i];
+        y4[i] = g_lpf2_K * y3[i] + ((float)1.0 - g_lpf2_K) * y4[i];
         if (y4[i] < 0)
             y4[i] = 0; // avoid negative numbers (not to clash with object detection encoding)
         // Square it to increase max/min ratio (increase dynamic resolution)
@@ -520,13 +522,13 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
 
         blind_ticker[i] -= (blind_ticker[i] > 0);
 
-        if (y4[i] > THRESHOLD && blind_ticker[i] <= 0) {
+        if (y4[i] > g_threshold && blind_ticker[i] <= 0) {
             blind_ticker[i] = g_blind_ticks_param;
             ObjectDetected(i);
         }
     }
 
-    if (g_verbose_level != 0)
+    if (g_verbose_level)
         AddValues(raw_data, y4);
 }
 

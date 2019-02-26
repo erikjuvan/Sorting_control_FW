@@ -15,14 +15,15 @@ extern int g_training;
 extern int g_sample_every_N_counts;
 extern int g_verbose_level;
 
-extern float A1;
-extern float A2;
-extern float A4;
-extern float THRESHOLD;
-
 extern uint32_t g_delay_ticks_param;
 extern uint32_t g_duration_ticks_param;
 extern uint32_t g_blind_ticks_param;
+
+extern float g_lpf1_K;
+extern float g_hpf_K;
+extern float g_lpf2_K;
+
+extern float g_threshold;
 
 extern void ChangeSampleFrequency();
 
@@ -122,9 +123,9 @@ static void Function_SETFREQ(char* str, write_func Write)
 
 static void Function_SETSORTTICKS(char* str, write_func Write)
 {
-    str                    = strtok(NULL, ",");
+    str                    = strtok(NULL, Delims);
     g_delay_ticks_param    = atoi(str);
-    str                    = strtok(NULL, ",");
+    str                    = strtok(NULL, Delims);
     g_duration_ticks_param = atoi(str);
     str                    = strtok(NULL, Delims);
     g_blind_ticks_param    = atoi(str);
@@ -132,14 +133,18 @@ static void Function_SETSORTTICKS(char* str, write_func Write)
 
 static void Function_SETFILTERCOEFF(char* str, write_func Write)
 {
-    str       = strtok(NULL, ",");
-    A1        = atof(str);
-    str       = strtok(NULL, ",");
-    A2        = atof(str);
-    str       = strtok(NULL, ",");
-    A4        = atof(str);
-    str       = strtok(NULL, Delims);
-    THRESHOLD = atof(str);
+    str      = strtok(NULL, Delims);
+    g_lpf1_K = atof(str);
+    str      = strtok(NULL, Delims);
+    g_hpf_K  = atof(str);
+    str      = strtok(NULL, Delims);
+    g_lpf2_K = atof(str);
+}
+
+static void Function_SETTHRESHOLD(char* str, write_func Write)
+{
+    str         = strtok(NULL, Delims);
+    g_threshold = atof(str);
 }
 
 static void Function_PING(char* str, write_func Write)
@@ -170,7 +175,15 @@ static void Function_GETSORTTICKS(char* str, write_func Write)
 static void Function_GETFILTERCOEFF(char* str, write_func Write)
 {
     char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f,%.1f\n", A1, A2, A4, THRESHOLD);
+    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f\n", g_lpf1_K, g_hpf_K, g_lpf2_K);
+
+    Write((uint8_t*)buf, strlen(buf));
+}
+
+static void Function_GETTHRESHOLD(char* str, write_func Write)
+{
+    char buf[10] = {0};
+    snprintf(buf, sizeof(buf), "%.1f\n", g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -181,7 +194,8 @@ static void Function_GETSETTINGS(char* str, write_func Write)
     int  sample_freq_hz = 0;
     if (g_sample_every_N_counts > 0)
         sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
-    snprintf(buf, sizeof(buf), "FREQ:%u\nSORT_TICKS:%u,%u,%u\nFILTER_COEFF:%.3f,%.3f,%.3f,%.1f\n", sample_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, A1, A2, A4, THRESHOLD);
+    snprintf(buf, sizeof(buf), "FREQ:%u\nSORT_TICKS:%u,%u,%u\nFILTER_COEFF:%.3f,%.3f,%.3f\nTHRESHOLD:%.1f\n",
+             sample_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -212,11 +226,13 @@ static struct {
     COMMAND(GETFREQ),
     COMMAND(GETSORTTICKS),
     COMMAND(GETFILTERCOEFF),
+    COMMAND(GETTHRESHOLD),
     COMMAND(GETSETTINGS),
 
     COMMAND(SETFREQ),
     COMMAND(SETSORTTICKS),
-    COMMAND(SETFILTERCOEFF)};
+    COMMAND(SETFILTERCOEFF),
+    COMMAND(SETTHRESHOLD)};
 
 void Parse(char* string, write_func Write)
 {
