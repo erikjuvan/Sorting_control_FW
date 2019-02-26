@@ -559,9 +559,9 @@ int main()
             }
 
             if (g_writeToPC) {
+                g_writeToPC = 0; // reset it right away - so that we register a new write request
                 VCP_write(&header, sizeof(header));
                 VCP_write(p_send_buffer, SEND_BUFFER_SIZE * sizeof(ProtocolDataType));
-                g_writeToPC = 0;
             }
         }
     }
