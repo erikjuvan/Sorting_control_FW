@@ -13,8 +13,8 @@ ADDITIONAL_LINKER_INPUTS :=
 MACOS_FRAMEWORKS := 
 LINUX_PACKAGES := 
 
-CFLAGS := -ggdb -ffunction-sections -O3 -fsingle-precision-constant
-CXXFLAGS := -ggdb -ffunction-sections -fno-exceptions -fno-rtti -O3 -fsingle-precision-constant
+CFLAGS := -ggdb -ffunction-sections -Og -fsingle-precision-constant
+CXXFLAGS := -ggdb -ffunction-sections -fno-exceptions -fno-rtti -Og -fsingle-precision-constant
 ASFLAGS := 
 LDFLAGS := -Wl,-gc-sections
 COMMONFLAGS := 
