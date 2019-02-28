@@ -37,8 +37,6 @@ int         VCP_read(void* pBuffer, int size);
 int         VCP_write(const void* pBuffer, int size);
 extern char g_VCPInitialized;
 
-extern CommunicationInterface g_communication_interface;
-
 #define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
 
