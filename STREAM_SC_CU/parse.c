@@ -194,7 +194,7 @@ static void Function_GETSETTINGS(char* str, write_func Write)
     int  sample_freq_hz = 0;
     if (g_sample_every_N_counts > 0)
         sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
-    snprintf(buf, sizeof(buf), "FREQ:%u\nSORTTICKS:%u,%u,%u\nFILTERCOEFF:%.3f,%.3f,%.3f\nTHRESHOLD:%.1f\n",
+    snprintf(buf, sizeof(buf), "FREQ,%u\nSORTTICKS,%u,%u,%u\nFILTERCOEFF,%.3f,%.3f,%.3f\nTHRESHOLD,%.1f\n",
              sample_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
