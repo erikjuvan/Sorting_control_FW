@@ -56,10 +56,10 @@ static void Function_UART_SORT(char* str, write_func Write)
     g_communication_interface = UART;
     g_mode                    = SORT;
 }
-static void Function_VERG(char* str, write_func Write)
+static void Function_VERSION(char* str, write_func Write)
 {
     char buf[100] = {0};
-    snprintf(buf, sizeof(buf), "VERG,%s,%s,%s", SWVER, HWVER, COMPATIBILITYMODE);
+    snprintf(buf, sizeof(buf), "VERSION,%s,%s,%s", SWVER, HWVER, COMPATIBILITYMODE);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -238,7 +238,7 @@ static struct {
     COMMAND(USB),
     COMMAND(UART),
     COMMAND(UART_SORT),
-    COMMAND(VERG),
+    COMMAND(VERSION),
     COMMAND(VRBG),
     COMMAND(VRBS),
     COMMAND(SETID),
