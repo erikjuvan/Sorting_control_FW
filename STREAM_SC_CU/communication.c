@@ -11,8 +11,6 @@ extern Mode          g_mode;
 int VCP_read(void* pBuffer, int size);
 int VCP_write(const void* pBuffer, int size);
 
-CommunicationInterface g_communication_interface = UART;
-
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
 static int     rx_buffer_size = 0;
 
@@ -20,12 +18,10 @@ static int     rx_buffer_size = 0;
 ///////////////////////
 void UART_RX_Complete_Callback(const uint8_t* data, int size)
 {
-    if (g_communication_interface == UART) {
-        rx_buffer_size = size;
-        memcpy(rx_buffer, data, size);
-        rx_buffer[size] = 0;
-        EXTI->SWIER     = EXTI_SWIER_SWIER0; // This triggers EXTI interrupt
-    }
+    rx_buffer_size = size;
+    memcpy(rx_buffer, data, size);
+    rx_buffer[size] = 0;
+    EXTI->SWIER     = EXTI_SWIER_SWIER0; // This triggers EXTI interrupt
 }
 ///////////////////////
 

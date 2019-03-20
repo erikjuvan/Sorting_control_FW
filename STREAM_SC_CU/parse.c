@@ -6,8 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern Mode                   g_mode;
-extern CommunicationInterface g_communication_interface;
+extern Mode g_mode;
 
 extern Header header;
 
@@ -41,21 +40,6 @@ static void Function_CONFIG(char* str, write_func Write)
     g_mode = CONFIG;
 }
 
-static void Function_USB(char* str, write_func Write)
-{
-    g_communication_interface = USB;
-}
-
-static void Function_UART(char* str, write_func Write)
-{
-    g_communication_interface = UART;
-}
-
-static void Function_UART_SORT(char* str, write_func Write)
-{
-    g_communication_interface = UART;
-    g_mode                    = SORT;
-}
 static void Function_VERSION(char* str, write_func Write)
 {
     char buf[100] = {0};
@@ -235,9 +219,6 @@ static struct {
 } command[] = {
     COMMAND(SORT),
     COMMAND(CONFIG),
-    COMMAND(USB),
-    COMMAND(UART),
-    COMMAND(UART_SORT),
     COMMAND(VERSION),
     COMMAND(VRBG),
     COMMAND(VRBS),
