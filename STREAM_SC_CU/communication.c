@@ -119,11 +119,12 @@ int USBWrite(const uint8_t* buffer, int size)
     uint8_t buf[UART_BUFFER_SIZE];
     int     len = 0;
 
-    if (size <= 0)
+    if (size <= 0 || size > (UART_BUFFER_SIZE - 1)) // -1 for newline at the end
         return 0;
 
     memcpy(buf, buffer, size);
-    len = VCP_write(buffer, size);
+    buf[size++] = CharacterMatch; // add terminating character
+    len         = VCP_write(buffer, size);
 
-    return len;
+    return len; // len will be size + 1 (because of terminating character)
 }
