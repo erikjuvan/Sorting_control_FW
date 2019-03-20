@@ -120,7 +120,7 @@ int USBWrite(const uint8_t* buffer, int size)
 
     memcpy(buf, buffer, size);
     buf[size++] = CharacterMatch; // add terminating character
-    len         = VCP_write(buffer, size);
+    len         = VCP_write(buf, size);
 
     return len; // len will be size + 1 (because of terminating character)
 }
