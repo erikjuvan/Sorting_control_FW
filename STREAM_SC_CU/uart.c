@@ -35,8 +35,11 @@ void USARTx_IRQHandler()
 
     if ((isrflags & USART_ISR_TXE) && (cr1its & USART_CR1_TXEIE)) {
         USARTx->TDR = uart_tx_buffer.data[uart_tx_buffer.i++];
-        if (uart_tx_buffer.i >= uart_tx_buffer.size)
-            USARTx->CR1 &= ~USART_CR1_TXEIE;
+        if (uart_tx_buffer.i >= uart_tx_buffer.size) {
+            USARTx->CR1 &= ~USART_CR1_TXEIE; // disable transmission
+            uart_tx_buffer.i    = 0;
+            uart_tx_buffer.size = 0;
+        }
     }
 }
 
@@ -125,17 +128,26 @@ void UART_Init()
 
 int UART_Write(const uint8_t* data, int size)
 {
-    int ret = 0;
+    // Disable UART transmission to prevent uart_tx_buffer corruption
+    USARTx->CR1 &= ~USART_CR1_TXEIE;
 
-    if (size > 0 && !(USARTx->CR1 & USART_CR1_TXEIE)) {
-        uart_tx_buffer.size = size > sizeof(uart_tx_buffer.data) ? sizeof(uart_tx_buffer.data) : size;
-        ret                 = uart_tx_buffer.size;
+    // Check if new data fits
+    if (uart_tx_buffer.size + size <= sizeof(uart_tx_buffer.data)) {
+        memcpy(&uart_tx_buffer.data[uart_tx_buffer.size], data, size);
+        uart_tx_buffer.size += size;
+    } else {
+        // Write an error message
+        const char ovrflw[] = "OVRFLW";
+        memcpy(uart_tx_buffer.data, ovrflw, sizeof(ovrflw));
+        uart_tx_buffer.size = sizeof(ovrflw);
         uart_tx_buffer.i    = 0;
-        memcpy(uart_tx_buffer.data, data, uart_tx_buffer.size);
-        USARTx->CR1 |= USART_CR1_TXEIE;
     }
 
-    return ret;
+    // Check if there is anything to send
+    if (uart_tx_buffer.size > 0)
+        USARTx->CR1 |= USART_CR1_TXEIE; // Enable transmission
+
+    return uart_tx_buffer.size - uart_tx_buffer.i; // return remaining
 }
 
 // Weak callback functions - to be implemented by the user in protocol specific section
