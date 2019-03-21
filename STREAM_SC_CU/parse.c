@@ -32,11 +32,17 @@ const static char Delims[] = "\n\r\t, ";
 
 static void Function_SORT(char* str, write_func Write)
 {
+    // Echo
+    Write((uint8_t*)"SORT", 4);
+
     g_mode = SORT;
 }
 
 static void Function_CONFIG(char* str, write_func Write)
 {
+    // Echo
+    Write((uint8_t*)"CONFIG", 6);
+
     g_mode = CONFIG;
 }
 
@@ -90,6 +96,9 @@ static void Function_GETID(char* str, write_func Write)
 
 static void Function_RESET(char* str, write_func Write)
 {
+    // Echo
+    Write((uint8_t*)"RESET", 5);
+
     NVIC_SystemReset();
 }
 
@@ -157,6 +166,7 @@ static void Function_SETTHRESHOLD(char* str, write_func Write)
 
 static void Function_PING(char* str, write_func Write)
 {
+    // Echo
     Write((uint8_t*)"PING", 4);
 }
 
