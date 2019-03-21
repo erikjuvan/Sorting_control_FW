@@ -99,6 +99,9 @@ static void Function_RESET(char* str, write_func Write)
     // Echo
     Write((uint8_t*)"RESET", 5);
 
+    // Give it time to send string back
+    HAL_Delay(100);
+
     NVIC_SystemReset();
 }
 
