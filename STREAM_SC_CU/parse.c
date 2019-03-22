@@ -56,11 +56,13 @@ static void Function_VERSION(char* str, write_func Write)
 static void Function_VRBS(char* str, write_func Write)
 {
     str             = strtok(NULL, Delims);
-    g_verbose_level = atoi((char*)str);
+    int verbose_lvl = atoi((char*)str);
 
     // Reset packet ID when entering verbose mode
-    if (g_verbose_level != 0)
+    if (verbose_lvl != 0)
         header.packet_id = 0;
+
+    g_verbose_level = verbose_lvl;
 }
 
 static void Function_VRBG(char* str, write_func Write)
