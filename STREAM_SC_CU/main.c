@@ -108,6 +108,10 @@ int   g_system_trained = 0;
 int   g_training       = 0;
 float g_trained_coeffs[N_CHANNELS];
 
+uint32_t g_prev_comm_tick     = 0;
+uint8_t  g_uninspected_module = 0;
+uint8_t  g_good_module        = 0;
+
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void)
@@ -546,6 +550,7 @@ void COM_UART_RX_Complete_Callback(uint8_t* buf, int size)
         txBuf[0] = det_obj >> 8; // no masking needed
         txBuf[1] = det_obj;      // no masking needed
         UARTWrite(txBuf, sizeof(txBuf));
+        g_prev_comm_tick = HAL_GetTick();
     }
 }
 
@@ -557,6 +562,14 @@ int main()
     Init();
 
     while (1) {
+
+        // Safety feature in case we lose comm with PLC
+        if (HAL_GetTick() - g_prev_comm_tick > 500) { // more than 500 ms
+            if (g_uninspected_module)
+                g_ejection_window = 0xFFFF; // Activate all valves
+            else if (g_good_module)
+                g_ejection_window = 0x0; // Deactivate all valves
+        }
 
         if (g_VCPInitialized) { // Make sure USB is initialized (calling, VCP_write can halt the system if the data structure hasn't been malloc-ed yet)
             usb_read = USBRead(rxBuf, sizeof(rxBuf));
