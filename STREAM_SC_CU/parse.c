@@ -1,10 +1,14 @@
-#include "parse.h"
-#include "communication.h"
-#include "main.h"
-#include "uart.h"
+// C Standard Library
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// User Library
+#include "communication.h"
+#include "main.h"
+#include "parse.h"
+#include "uart.h"
 
 extern Mode g_mode;
 
@@ -38,18 +42,18 @@ static void Function_SORT(char* str, write_func Write)
     g_mode = SORT;
 }
 
-static void Function_CONFIG(char* str, write_func Write)
+static void Function_CONF(char* str, write_func Write)
 {
     // Echo
-    Write((uint8_t*)"CONFIG", 6);
+    Write((uint8_t*)"CONF", 4);
 
     g_mode = CONFIG;
 }
 
-static void Function_VERSION(char* str, write_func Write)
+static void Function_VERG(char* str, write_func Write)
 {
     char buf[100] = {0};
-    snprintf(buf, sizeof(buf), "VERSION,%s,%s,%s", SWVER, HWVER, COMPATIBILITYMODE);
+    snprintf(buf, sizeof(buf), "VERG,%s,%s,%s", SWVER, HWVER, COMPATIBILITYMODE);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -63,6 +67,11 @@ static void Function_VRBS(char* str, write_func Write)
         header.packet_id = 0;
 
     g_verbose_level = verbose_lvl;
+
+    // Echo
+    char buf[10] = {0};
+    snprintf(buf, sizeof(buf), "VRBS,%u", verbose_lvl);
+    Write((uint8_t*)buf, strlen(buf));
 }
 
 static void Function_VRBG(char* str, write_func Write)
@@ -73,7 +82,7 @@ static void Function_VRBG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_SETID(char* str, write_func Write)
+static void Function_ID_S(char* str, write_func Write)
 {
     str = strtok(NULL, Delims);
     if (str != NULL) {
@@ -85,21 +94,21 @@ static void Function_SETID(char* str, write_func Write)
 
     // Echo
     char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "SETID,%u", UART_Address);
+    snprintf(buf, sizeof(buf), "ID_S,%u", UART_Address);
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETID(char* str, write_func Write)
+static void Function_ID_G(char* str, write_func Write)
 {
     char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "ID,%u", UART_Address);
+    snprintf(buf, sizeof(buf), "ID_G,%u", UART_Address);
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_RESET(char* str, write_func Write)
+static void Function_RSET(char* str, write_func Write)
 {
     // Echo
-    Write((uint8_t*)"RESET", 5);
+    Write((uint8_t*)"RSET", 4);
 
     // Give it time to send string back
     HAL_Delay(100);
@@ -107,13 +116,13 @@ static void Function_RESET(char* str, write_func Write)
     NVIC_SystemReset();
 }
 
-static void Function_TRAIN(char* str, write_func Write)
+static void Function_TRAN(char* str, write_func Write)
 {
     // Not currently supported
 }
 
-// "SETFREQ,1000" - 1000 Hz
-static void Function_SETFREQ(char* str, write_func Write)
+// "FRQS,1000" - 1000 Hz
+static void Function_FRQS(char* str, write_func Write)
 {
     str                          = strtok(NULL, Delims);
     int requested_sample_freq_hz = atoi((char*)str);
@@ -123,12 +132,12 @@ static void Function_SETFREQ(char* str, write_func Write)
     }
 
     // Echo
-    char buf[30];
-    snprintf(buf, sizeof(buf), "SETFREQ,%u", requested_sample_freq_hz);
+    char buf[20];
+    snprintf(buf, sizeof(buf), "FRQS,%u", requested_sample_freq_hz);
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_SETSORTTICKS(char* str, write_func Write)
+static void Function_SRTS(char* str, write_func Write)
 {
     str                    = strtok(NULL, Delims);
     g_delay_ticks_param    = atoi(str);
@@ -139,11 +148,11 @@ static void Function_SETSORTTICKS(char* str, write_func Write)
 
     // Echo
     char buf[50];
-    snprintf(buf, sizeof(buf), "SETSORTTICKS,%u,%u,%u", g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param);
+    snprintf(buf, sizeof(buf), "SRTS,%u,%u,%u", g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param);
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_SETFILTERCOEFF(char* str, write_func Write)
+static void Function_FILS(char* str, write_func Write)
 {
     str      = strtok(NULL, Delims);
     g_lpf1_K = atof(str);
@@ -154,18 +163,18 @@ static void Function_SETFILTERCOEFF(char* str, write_func Write)
 
     // Echo
     char buf[80];
-    snprintf(buf, sizeof(buf), "SETFILTERCOEFF,%.3f,%.3f,%.3f", g_lpf1_K, g_hpf_K, g_lpf2_K);
+    snprintf(buf, sizeof(buf), "FILS,%.3f,%.3f,%.3f", g_lpf1_K, g_hpf_K, g_lpf2_K);
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_SETTHRESHOLD(char* str, write_func Write)
+static void Function_THRS(char* str, write_func Write)
 {
     str         = strtok(NULL, Delims);
     g_threshold = atof(str);
 
     // Echo
     char buf[30];
-    snprintf(buf, sizeof(buf), "SETTHRESHOLD,%.1f", g_threshold);
+    snprintf(buf, sizeof(buf), "THRS,%.1f", g_threshold);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -175,43 +184,43 @@ static void Function_PING(char* str, write_func Write)
     Write((uint8_t*)"PING", 4);
 }
 
-static void Function_GETFREQ(char* str, write_func Write)
+static void Function_FRQG(char* str, write_func Write)
 {
     char buf[10]        = {0};
     int  sample_freq_hz = 0;
     if (g_sample_every_N_counts > 0)
         sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
 
-    snprintf(buf, sizeof(buf), "%u", sample_freq_hz);
+    snprintf(buf, sizeof(buf), "FRQG,%u", sample_freq_hz);
 
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETSORTTICKS(char* str, write_func Write)
+static void Function_SRTG(char* str, write_func Write)
 {
     char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%u,%u,%u", g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param);
+    snprintf(buf, sizeof(buf), "SRTG,%u,%u,%u", g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param);
 
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETFILTERCOEFF(char* str, write_func Write)
+static void Function_FILG(char* str, write_func Write)
 {
     char buf[50] = {0};
-    snprintf(buf, sizeof(buf), "%.3f,%.3f,%.3f", g_lpf1_K, g_hpf_K, g_lpf2_K);
+    snprintf(buf, sizeof(buf), "FILG,%.3f,%.3f,%.3f", g_lpf1_K, g_hpf_K, g_lpf2_K);
 
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETTHRESHOLD(char* str, write_func Write)
+static void Function_THRG(char* str, write_func Write)
 {
     char buf[10] = {0};
-    snprintf(buf, sizeof(buf), "%.1f", g_threshold);
+    snprintf(buf, sizeof(buf), "THRG,%.1f", g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_GETSETTINGS(char* str, write_func Write)
+static void Function_STTG(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
     int  sample_freq_hz = 0;
@@ -232,27 +241,28 @@ static struct {
     const char* name;
     void (*Func)(char*, write_func);
 } command[] = {
-    COMMAND(SORT),
-    COMMAND(CONFIG),
-    COMMAND(VERSION),
-    COMMAND(VRBG),
-    COMMAND(VRBS),
-    COMMAND(SETID),
-    COMMAND(GETID),
-    COMMAND(PING),
-    COMMAND(RESET),
-    COMMAND(TRAIN),
+    COMMAND(SORT), // SORT MODE
+    COMMAND(CONF), // CONFIG MODE
+    COMMAND(VERG), // GET VERSION
+    COMMAND(VRBG), // GET VERBOSE LEVEL
+    COMMAND(VRBS), // SET VERBOSE LEVEL
+    COMMAND(ID_S), // SET ID
+    COMMAND(ID_G), // GET ID
+    COMMAND(PING), // PING (echo)
+    COMMAND(RSET), // RESET
+    COMMAND(TRAN), // TRAIN
 
-    COMMAND(GETFREQ),
-    COMMAND(GETSORTTICKS),
-    COMMAND(GETFILTERCOEFF),
-    COMMAND(GETTHRESHOLD),
-    COMMAND(GETSETTINGS),
+    COMMAND(FRQG), // GET FREQUENCY
+    COMMAND(SRTG), // GET SORTING TICKS
+    COMMAND(FILG), // GET FILTER COEFFICIENTS
+    COMMAND(THRG), // GET THREASHOLD
+    COMMAND(STTG), // GET (ALL) SETTINGS
 
-    COMMAND(SETFREQ),
-    COMMAND(SETSORTTICKS),
-    COMMAND(SETFILTERCOEFF),
-    COMMAND(SETTHRESHOLD)};
+    COMMAND(FRQS), // SET FREQUENCY
+    COMMAND(SRTS), // SET SORTING TICKS
+    COMMAND(FILS), // SET FILTER COEFFICIENTS
+    COMMAND(THRS), // SET THREASHOLD
+};
 
 void Parse(char* string, write_func Write)
 {
@@ -262,7 +272,7 @@ void Parse(char* string, write_func Write)
     while (str != NULL) {
 
         for (int i = 0; i < sizeof(command) / sizeof(command[0]); ++i) {
-            if (strcmp(str, command[i].name) == 0) {
+            if (*(uint32_t*)str == *(uint32_t*)command[i].name) {
                 command[i].Func(str, Write);
                 break;
             }
