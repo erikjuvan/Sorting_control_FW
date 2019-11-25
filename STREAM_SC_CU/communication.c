@@ -100,14 +100,24 @@ int UARTWrite(const uint8_t* buffer, int size)
 
 int USBRead(uint8_t* buffer, int max_size)
 {
-    int len = 0;
-    int tmp = 0;
-    while ((tmp = VCP_read(&buffer[len], max_size - len)) > 0) {
-        len += tmp;
+    static uint32_t last_read_tick = 0;
+    static int      total_read     = 0;
+    int             read           = 0;
+    // Read while there is data in buffer
+    /* NOTE: Added delayed return since there was a problem with USB driver which reads data in 64 byte chunks.
+       This will erronously parse data not received in its entirety (over 64 bytes)).
+       I have measured, and it takes approx 200 us between receptions of 64 bytes packets. */
+    if ((read = VCP_read(&buffer[total_read], max_size - total_read)) > 0) {
+        last_read_tick = HAL_GetTick();
+        total_read += read;
+    } else if (total_read > 0 && ((HAL_GetTick() - last_read_tick) > 3)) { // at least 3 ms ("terminal.exe" sometimes takes > 2 ms when sending files, so this is to be on the safe side, otherwise try to use some other/better program, I use a hand written one)
+        buffer[total_read] = 0;
+        int tmp            = total_read;
+        total_read         = 0;
+        return tmp;
     }
-    buffer[len] = 0;
 
-    return len;
+    return 0;
 }
 
 int USBWrite(const uint8_t* buffer, int size)
