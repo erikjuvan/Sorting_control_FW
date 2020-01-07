@@ -21,9 +21,12 @@ VisualGDB/
 x64/
 x86/
 bld/
-[Bb]in/
+[Bb]in/*
 [Oo]bj/
 [Ll]og/
+
+# Unignore bin/*.bin file which is a release file used for programming
+![Bb]in/*.bin
 
 # Visual Studio 2015 cache/options directory
 .vs/
