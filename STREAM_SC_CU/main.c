@@ -37,8 +37,6 @@ int         VCP_read(void* pBuffer, int size);
 int         VCP_write(const void* pBuffer, int size);
 extern char g_VCPInitialized;
 
-extern CommunicationInterface g_communication_interface;
-
 #define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
 
@@ -512,11 +510,15 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
         y1[i] = g_lpf1_K * y0[i] + ((float)1.0 - g_lpf1_K) * y1[i];
         // HPF
         y2[i] = g_hpf_K * y1[i] + ((float)1.0 - g_hpf_K) * y2[i];
-        y3[i] = y2[i] - y1[i];
-        // Feature LPF
+        y3[i] = y1[i] - y2[i];
+        // Feature
+        y3[i] = fabsf(y3[i]); // added benefit: avoiding negative numbers (not to clash with object detection encoding)
+        // LPF
         y4[i] = g_lpf2_K * y3[i] + ((float)1.0 - g_lpf2_K) * y4[i];
-        if (y4[i] < 0)
-            y4[i] = 0; // avoid negative numbers (not to clash with object detection encoding)
+
+        // Overriding values can be dangerous if shape of signal makes it such that signal rises at the begining instead of falls
+        //if (y4[i] < 0)
+        //  y4[i] = 0; // avoid negative numbers (not to clash with object detection encoding)
         // Square it to increase max/min ratio (increase dynamic resolution)
         // y4[i] = y4[i] * y4[i]; // not used at the moment
 

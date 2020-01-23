@@ -1381,10 +1381,12 @@
 //.
 //$(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc
 //$(BSP_ROOT)/STM32F7xxxx/STM32F7xx_HAL_Driver/Inc/Legacy
+//$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Core/Include
 //$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Device/ST/STM32F7xx/Include
 //$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/Include
-//$(BSP_ROOT)/STM32_USB_Device_Library/Core/Inc
-//$(BSP_ROOT)/STM32_USB_Device_Library/Class/CDC/Inc
+//$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/RTOS2/Include
+//$(BSP_ROOT)/STM32F7xxxx/STM32_USB_Device_Library/Core/Inc
+//$(BSP_ROOT)/STM32F7xxxx/STM32_USB_Device_Library/Class/CDC/Inc
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\arm-eabi\thumb\fpu\cortex_m7
 //$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\backward
