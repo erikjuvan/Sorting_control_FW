@@ -186,7 +186,7 @@ static void Function_PING(char* str, write_func Write)
 
 static void Function_FRQG(char* str, write_func Write)
 {
-    char buf[10]        = {0};
+    char buf[20]        = {0};
     int  sample_freq_hz = 0;
     if (g_sample_every_N_counts > 0)
         sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
@@ -214,7 +214,7 @@ static void Function_FILG(char* str, write_func Write)
 
 static void Function_THRG(char* str, write_func Write)
 {
-    char buf[10] = {0};
+    char buf[20] = {0};
     snprintf(buf, sizeof(buf), "THRG,%.1f", g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
