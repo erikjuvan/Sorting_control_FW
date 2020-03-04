@@ -40,9 +40,14 @@ extern char g_VCPInitialized;
 #define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
 
-#define IR_LED_PORT GPIOE
-#define IR_LED_PIN GPIO_PIN_8
-#define IR_LED_CLK __GPIOE_CLK_ENABLE
+// IR TX LED 1
+#define IR_LED_PORT_1 GPIOE
+#define IR_LED_PIN_1 GPIO_PIN_8
+#define IR_LED_CLK_1 __GPIOE_CLK_ENABLE
+// IR TX LED 2
+#define IR_LED_PORT_2 GPIOA
+#define IR_LED_PIN_2 GPIO_PIN_8
+#define IR_LED_CLK_2 __GPIOA_CLK_ENABLE
 
 #define TIMx TIM1
 #define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
@@ -55,7 +60,7 @@ extern char g_VCPInitialized;
 #define DEBUG_PIN_1 GPIO_PIN_4
 #define DEBUG_PIN_2 GPIO_PIN_2
 
-//#define DEBUG_TIM
+#define DEBUG_TIM
 //#define STOPWATCH
 
 static void Filter(uint32_t* x);
@@ -114,6 +119,10 @@ float g_trained_coeffs[N_CHANNELS];
 
 static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
 
+int g_txir1_en       = 1;
+int g_txir2_en       = 1;
+int g_txir_alternate = 0;
+
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void)
@@ -148,33 +157,93 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
     HAL_GPIO_TogglePin(DEBUG_PORT, DEBUG_PIN_2);
 #endif
 
-    uint32_t buf[N_CHANNELS];
+    static uint32_t buf[N_CHANNELS] = {0};
 
-    if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
-        DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
-        for (int i = 0; i < N_CHANNELS; ++i)
-            buf[i] = buffer[0][i];
-    } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
-        DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
-        for (int i = 0; i < N_CHANNELS; ++i)
-            buf[i] = buffer[BUFFER_SIZE / 2][i];
-    }
+    if (g_txir_alternate) {
 
-    Filter(buf);
+        static int active_tx_leds = 0; // 0 - even, 1 - odd
 
-    for (int i = 0; i < N_CHANNELS; ++i) {
-        if (g_delay_ticker[i] >= 0) {
-            if (g_delay_ticker[i]-- == 0) {
-                VALVE_PORT->BSRR     = g_Valve_Pins[i];
-                g_duration_ticker[i] = g_duration_ticks_param;
+        if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
+            DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
+            for (int i = active_tx_leds; i < N_CHANNELS; i += 2)
+                buf[i] = buffer[0][i];
+        } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
+            DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
+            for (int i = active_tx_leds; i < N_CHANNELS; i += 2)
+                buf[i] = buffer[BUFFER_SIZE / 2][i];
+        }
+
+        if (active_tx_leds == 1) {
+
+            Filter(buf);
+
+            for (int i = 0; i < N_CHANNELS; ++i) {
+                if (g_delay_ticker[i] >= 0) {
+                    if (g_delay_ticker[i]-- == 0) {
+                        VALVE_PORT->BSRR     = g_Valve_Pins[i];
+                        g_duration_ticker[i] = g_duration_ticks_param;
+                    }
+                }
+
+                if (g_duration_ticker[i] >= 0) {
+                    if (g_duration_ticker[i]-- == 0) {
+                        VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+                    }
+                }
             }
         }
 
-        if (g_duration_ticker[i] >= 0) {
-            if (g_duration_ticker[i]-- == 0) {
-                VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+        // Check which set (odd / even) was active and switch it (pin1 - 0 = EVEN, pin2 - 1 = ODD)
+        if (active_tx_leds == 0) { // if EVEN was active, then turn on odd
+            active_tx_leds = 1;
+            GPIO_CLR_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
+            if (g_txir2_en)
+                GPIO_SET_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
+        } else { // ODD // if ODD was active then turn on even
+            active_tx_leds = 0;
+            if (g_txir1_en)
+                GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
+            GPIO_CLR_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
+        }
+
+    } else {
+
+        if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
+            DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
+            for (int i = 0; i < N_CHANNELS; ++i)
+                buf[i] = buffer[0][i];
+        } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
+            DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
+            for (int i = 0; i < N_CHANNELS; ++i)
+                buf[i] = buffer[BUFFER_SIZE / 2][i];
+        }
+
+        Filter(buf);
+
+        for (int i = 0; i < N_CHANNELS; ++i) {
+            if (g_delay_ticker[i] >= 0) {
+                if (g_delay_ticker[i]-- == 0) {
+                    VALVE_PORT->BSRR     = g_Valve_Pins[i];
+                    g_duration_ticker[i] = g_duration_ticks_param;
+                }
+            }
+
+            if (g_duration_ticker[i] >= 0) {
+                if (g_duration_ticker[i]-- == 0) {
+                    VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+                }
             }
         }
+
+        if (g_txir1_en)
+            GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
+        else
+            GPIO_CLR_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
+
+        if (g_txir2_en)
+            GPIO_SET_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
+        else
+            GPIO_CLR_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
     }
 }
 /////////////////////////////////////
@@ -354,13 +423,18 @@ void GPIO_Configure()
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
-    // IR LED
-    IR_LED_CLK();
-    GPIO_InitStructure.Pin   = IR_LED_PIN;
+    // IR LED 1
+    IR_LED_CLK_1();
+    GPIO_InitStructure.Pin   = IR_LED_PIN_1;
     GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStructure.Pull  = GPIO_NOPULL;
     GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
-    HAL_GPIO_Init(IR_LED_PORT, &GPIO_InitStructure);
+    HAL_GPIO_Init(IR_LED_PORT_1, &GPIO_InitStructure);
+
+    // IR LED 2
+    IR_LED_CLK_2();
+    GPIO_InitStructure.Pin = IR_LED_PIN_2;
+    HAL_GPIO_Init(IR_LED_PORT_2, &GPIO_InitStructure);
 
     // Valve GPIO
     VALVE_CLK_ENABLE();
@@ -414,7 +488,7 @@ static void Init()
 
     UART_Init();
 
-    GPIO_SET_BIT(IR_LED_PORT, IR_LED_PIN);
+    GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
 
 #ifdef STOPWATCH
     EnableCC();

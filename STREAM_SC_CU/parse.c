@@ -29,6 +29,10 @@ extern float g_threshold;
 
 extern uint8_t UART_Address;
 
+extern int g_txir1_en;
+extern int g_txir2_en;
+extern int g_txir_alternate;
+
 const static char Delims[] = "\n\r\t, ";
 
 static void Function_SORT(char* str, write_func Write)
@@ -222,6 +226,21 @@ static void Function_STTG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+static void Function_IREN(char* str, write_func Write)
+{
+    if ((str = strtok(NULL, Delims)))
+        g_txir1_en = atoi(str);
+    if ((str = strtok(NULL, Delims)))
+        g_txir2_en = atoi(str);
+    if ((str = strtok(NULL, Delims)))
+        g_txir_alternate = atoi(str);
+
+    // Echo
+    char buf[30];
+    snprintf(buf, sizeof(buf), "IREN,%d,%d,%d", g_txir1_en, g_txir2_en, g_txir_alternate);
+    Write((uint8_t*)buf, strlen(buf));
+}
+
 #define COMMAND(NAME)          \
     {                          \
 #NAME, Function_##NAME \
@@ -252,6 +271,9 @@ static struct {
     COMMAND(SRTS), // SET SORTING TICKS
     COMMAND(FILS), // SET FILTER COEFFICIENTS
     COMMAND(THRS), // SET THREASHOLD
+
+    // Prototype
+    COMMAND(IREN),
 };
 
 void Parse(char* string, write_func Write)
