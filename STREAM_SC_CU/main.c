@@ -46,9 +46,16 @@ extern char g_VCPInitialized;
 
 #define TIMx TIM1
 #define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
-#define TIMx_IRQ_Handler TIM1_IRQHandler
+#define TIMx_IRQ_Handler TIM1_UP_TIM10_IRQHandler
+#define TIMx_IRQn TIM1_UP_TIM10_IRQn
 
-//#define	DEBUG_TIM
+// GPIO pins for debugging
+#define DEBUG_PORT GPIOB
+#define DEBUG_PORT_CLK __GPIOB_CLK_ENABLE
+#define DEBUG_PIN_1 GPIO_PIN_4
+#define DEBUG_PIN_2 GPIO_PIN_2
+
+#define DEBUG_TIM
 //#define	STOPWATCH
 
 static void Filter(uint32_t* x);
@@ -89,9 +96,6 @@ float g_threshold = 0.f;
 int32_t g_delay_ticker[N_CHANNELS]    = {-1, -1, -1, -1, -1, -1, -1, -1}; // -1 to prevent turn on at power on
 int32_t g_duration_ticker[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
-// Trigger DMA IRQ when TIM counter reaches bottom variable
-uint32_t g_sample_every_N_counts = 0;
-
 int g_verbose_level = 0;
 
 #define VALVE_PORT GPIOD
@@ -108,6 +112,8 @@ int   g_system_trained = 0;
 int   g_training       = 0;
 float g_trained_coeffs[N_CHANNELS];
 
+static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
+
 // IRQ
 /////////////////////////////////////
 void SysTick_Handler(void)
@@ -123,8 +129,14 @@ void OTG_FS_IRQHandler(void)
 #ifdef DEBUG_TIM
 void TIMx_IRQ_Handler()
 {
-    TIMx->SR &= ~(TIM_SR_TIF | TIM_SR_UIF);
-    GPIOA->BSRR = GPIO_PIN_8;
+    if (TIMx->SR & TIM_SR_UIF) {
+        TIMx->SR &= ~TIM_SR_UIF;
+        HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_SET);
+    } else {
+        // Should not be here
+        __asm("bkpt 255");
+        __asm("bx lr");
+    }
 }
 #endif
 
@@ -132,7 +144,8 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 {
 
 #ifdef DEBUG_TIM
-    GPIOA->BSRR = GPIO_PIN_8 << 16;
+    HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_RESET);
+    HAL_GPIO_TogglePin(DEBUG_PORT, DEBUG_PIN_2);
 #endif
 
     uint32_t buf[N_CHANNELS];
@@ -323,18 +336,17 @@ void TIM_Configure()
     TIMx_CLK_ENALBE();
 
     TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / TIM_COUNT_FREQ) - 1; // Set prescaler to count with 1 us period
-    TIMx->ARR  = g_sample_every_N_counts - 1;
-    TIMx->CR2  = TIM_CR2_MMS_1;
+    TIMx->CR2  = TIM_TRGO_UPDATE;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
     TIMx->DIER = 0;
     TIMx->CR1  = TIM_CR1_CEN;
 
 #ifdef DEBUG_TIM
-    TIMx->DIER = TIM_DIER_TIE | TIM_DIER_UIE;
+    TIMx->DIER = TIM_DIER_UIE;
 
-    HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TIM2_IRQn);
+    HAL_NVIC_SetPriority(TIMx_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(TIMx_IRQn);
 #endif
 }
 
@@ -357,6 +369,15 @@ void GPIO_Configure()
     GPIO_InitStructure.Pull  = GPIO_NOPULL;
     GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
     HAL_GPIO_Init(VALVE_PORT, &GPIO_InitStructure);
+
+#ifdef DEBUG_TIM
+    DEBUG_PORT_CLK();
+    GPIO_InitStructure.Pin   = DEBUG_PIN_1 | DEBUG_PIN_2;
+    GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStructure.Pull  = GPIO_NOPULL;
+    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
+    HAL_GPIO_Init(DEBUG_PORT, &GPIO_InitStructure);
+#endif
 }
 
 void EXTI_Configure()
@@ -411,10 +432,17 @@ static void Init()
     USB_Init();
 }
 
-void ChangeSampleFrequency()
+void SetSampleFrequency(int freq_hz)
 {
-    TIMx->ARR = g_sample_every_N_counts - 1;
-    TIMx->EGR = TIM_EGR_UG;
+    int sample_every_N_counts = TIM_COUNT_FREQ / freq_hz;
+    TIMx->ARR                 = sample_every_N_counts - 1;
+    TIMx->EGR                 = TIM_EGR_UG;
+}
+
+uint32_t GetSampleFrequency()
+{
+    int sample_every_N_counts = TIMx->ARR + 1;
+    return TIM_COUNT_FREQ / sample_every_N_counts;
 }
 
 static void Train()

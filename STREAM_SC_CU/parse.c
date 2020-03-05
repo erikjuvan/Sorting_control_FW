@@ -15,7 +15,6 @@ extern Mode g_mode;
 extern Header header;
 
 extern int g_training;
-extern int g_sample_every_N_counts;
 extern int g_verbose_level;
 
 extern uint32_t g_delay_ticks_param;
@@ -27,8 +26,6 @@ extern float g_hpf_K;
 extern float g_lpf2_K;
 
 extern float g_threshold;
-
-extern void ChangeSampleFrequency();
 
 extern uint8_t UART_Address;
 
@@ -124,16 +121,15 @@ static void Function_TRAN(char* str, write_func Write)
 // "FRQS,1000" - 1000 Hz
 static void Function_FRQS(char* str, write_func Write)
 {
-    str                          = strtok(NULL, Delims);
-    int requested_sample_freq_hz = atoi((char*)str);
-    if (requested_sample_freq_hz > 0) {
-        g_sample_every_N_counts = TIM_COUNT_FREQ / requested_sample_freq_hz; // convert val which are hertz to period which is in us
-        ChangeSampleFrequency();
+    str         = strtok(NULL, Delims);
+    int freq_hz = atoi((char*)str);
+    if (freq_hz > 0) { // WARNING: Currently we are using TIM1 which has 16bit ARR, so with our 1us resolution the minimum frequency we can get is approx. 15 Hz.
+        SetSampleFrequency(freq_hz);
     }
 
     // Echo
     char buf[20];
-    snprintf(buf, sizeof(buf), "FRQS,%u", requested_sample_freq_hz);
+    snprintf(buf, sizeof(buf), "FRQS,%u", GetSampleFrequency());
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -186,12 +182,9 @@ static void Function_PING(char* str, write_func Write)
 
 static void Function_FRQG(char* str, write_func Write)
 {
-    char buf[20]        = {0};
-    int  sample_freq_hz = 0;
-    if (g_sample_every_N_counts > 0)
-        sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
+    char buf[20] = {0};
 
-    snprintf(buf, sizeof(buf), "FRQG,%u", sample_freq_hz);
+    snprintf(buf, sizeof(buf), "FRQG,%u", GetSampleFrequency());
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -223,11 +216,8 @@ static void Function_THRG(char* str, write_func Write)
 static void Function_STTG(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
-    int  sample_freq_hz = 0;
-    if (g_sample_every_N_counts > 0)
-        sample_freq_hz = TIM_COUNT_FREQ / g_sample_every_N_counts;
     snprintf(buf, sizeof(buf), "FREQ,%u\nSORTTICKS,%u,%u,%u\nFILTERCOEFF,%.3f,%.3f,%.3f\nTHRESHOLD,%.1f\n",
-             sample_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
+             GetSampleFrequency(), g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
 }
