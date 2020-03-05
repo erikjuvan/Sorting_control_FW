@@ -55,8 +55,8 @@ extern char g_VCPInitialized;
 #define DEBUG_PIN_1 GPIO_PIN_4
 #define DEBUG_PIN_2 GPIO_PIN_2
 
-#define DEBUG_TIM
-//#define	STOPWATCH
+//#define DEBUG_TIM
+//#define STOPWATCH
 
 static void Filter(uint32_t* x);
 
