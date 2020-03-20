@@ -29,9 +29,7 @@ extern float g_threshold;
 
 extern uint8_t UART_Address;
 
-extern int g_txir1_en;
-extern int g_txir2_en;
-extern int g_txir_alternate;
+extern int g_sync_output_enabled;
 
 const static char Delims[] = "\n\r\t, ";
 
@@ -226,18 +224,36 @@ static void Function_STTG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_IREN(char* str, write_func Write)
+static void Function_SEQS(char* str, write_func Write)
 {
-    if ((str = strtok(NULL, Delims)))
-        g_txir1_en = atoi(str);
-    if ((str = strtok(NULL, Delims)))
-        g_txir2_en = atoi(str);
-    if ((str = strtok(NULL, Delims)))
-        g_txir_alternate = atoi(str);
+    int seq[10];
+    int i = 0;
+    while ((str = strtok(NULL, Delims)) != NULL) {
+        seq[i++] = atoi(str);
+    }
+
+    SetSequence(seq, i);
 
     // Echo
-    char buf[30];
-    snprintf(buf, sizeof(buf), "IREN,%d,%d,%d", g_txir1_en, g_txir2_en, g_txir_alternate);
+    char buf[50];
+    char seq_buf[10];
+    snprintf(buf, sizeof(buf), "SEQS,%s", GetSequence(seq_buf, sizeof(seq_buf)));
+    Write((uint8_t*)buf, strlen(buf));
+}
+
+static void Function_SYNS(char* str, write_func Write)
+{
+    str              = strtok(NULL, Delims);
+    int sync_enabled = atoi(str);
+
+    if (sync_enabled)
+        SetSyncPinAsOutput();
+    else
+        SetSyncPinAsInput();
+
+    // Echo
+    char buf[20];
+    snprintf(buf, sizeof(buf), "SYNS,%d", sync_enabled);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -272,8 +288,9 @@ static struct {
     COMMAND(FILS), // SET FILTER COEFFICIENTS
     COMMAND(THRS), // SET THREASHOLD
 
-    // Prototype
-    COMMAND(IREN),
+    // Not yet tested
+    COMMAND(SEQS), // Sequence set, seq1, seq2, ... (e.g. SEQS,EVEN,ODD). For now the default are 2 sequences.
+    COMMAND(SYNS), // Sync Ouptut set, on/off (1/0)
 };
 
 void Parse(char* string, write_func Write)

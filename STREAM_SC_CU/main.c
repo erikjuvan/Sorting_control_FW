@@ -4,6 +4,7 @@
 #include <usbd_desc.h>
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -40,15 +41,37 @@ extern char g_VCPInitialized;
 #define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
 
-// IR TX LED 1
-#define IR_LED_PORT_1 GPIOE
-#define IR_LED_PIN_1 GPIO_PIN_8
-#define IR_LED_CLK_1 __GPIOE_CLK_ENABLE
-// IR TX LED 2
-#define IR_LED_PORT_2 GPIOA
-#define IR_LED_PIN_2 GPIO_PIN_8
-#define IR_LED_CLK_2 __GPIOA_CLK_ENABLE
+/*
+// IR TX LEDs EVEN
+#define IR_LED_EVEN_PORT GPIOA
+#define IR_LED_EVEN_PIN GPIO_PIN_8
+#define IR_LED_EVEN_CLK __GPIOA_CLK_ENABLE
+// IR TX LEDs ODD
+#define IR_LED_ODD_PORT GPIOB
+#define IR_LED_ODD_PIN GPIO_PIN_6
+#define IR_LED_ODD_CLK __GPIOB_CLK_ENABLE
 
+// SYNC PIN
+#define SYNC_PORT GPIOA
+#define SYNC_PIN GPIO_PIN_10
+#define SYNC_CLK __GPIOA_CLK_ENABLE
+*/
+
+// Za testiranje na NUCLEO boardu uporabljam port E
+// IR TX LEDs EVEN
+#define IR_LED_EVEN_PORT GPIOE
+#define IR_LED_EVEN_PIN GPIO_PIN_11
+#define IR_LED_EVEN_CLK __GPIOE_CLK_ENABLE
+// IR TX LEDs ODD
+#define IR_LED_ODD_PORT GPIOE
+#define IR_LED_ODD_PIN GPIO_PIN_12
+#define IR_LED_ODD_CLK __GPIOE_CLK_ENABLE
+// SYNC PIN
+#define SYNC_PORT GPIOE
+#define SYNC_PIN GPIO_PIN_10
+#define SYNC_CLK __GPIOE_CLK_ENABLE
+
+// Timer
 #define TIMx TIM1
 #define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
 #define TIMx_IRQ_Handler TIM1_UP_TIM10_IRQHandler
@@ -119,9 +142,59 @@ float g_trained_coeffs[N_CHANNELS];
 
 static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
 
-int g_txir1_en       = 1;
-int g_txir2_en       = 1;
-int g_txir_alternate = 0;
+// IR LEDs
+/////////////////////////////////////
+typedef enum {
+    OFF  = 0,
+    EVEN = 1,
+    ODD  = 2,
+    ALL  = 3
+} ActiveLEDs;
+
+ActiveLEDs         sequence[]   = {ALL, ALL}; // default sequence.
+unsigned int       sequence_idx = 0;
+const unsigned int sequence_N   = sizeof(sequence) / sizeof(sequence[0]);
+
+int g_sync_output_enabled = 0;
+/////////////////////////////////////
+
+static void SetIRLEDs(ActiveLEDs activate_led)
+{
+    switch (activate_led) {
+    case OFF:
+        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    case EVEN:
+        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        break;
+    case ODD:
+        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    case ALL:
+    default:
+        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    }
+}
+
+static void ChangeCurrentSequence(unsigned int si)
+{
+    if (si < sequence_N)
+        sequence_idx = si;
+    else
+        sequence_idx = 0;
+
+    SetIRLEDs(sequence[sequence_idx]);
+}
+
+static void NextSequence()
+{
+    ChangeCurrentSequence(sequence_idx + 1);
+}
 
 // IRQ
 /////////////////////////////////////
@@ -135,19 +208,46 @@ void OTG_FS_IRQHandler(void)
     HAL_PCD_IRQHandler(&hpcd);
 }
 
-#ifdef DEBUG_TIM
-void TIMx_IRQ_Handler()
+__attribute__((optimize("O1"))) void EXTI15_10_IRQHandler(void)
 {
-    if (TIMx->SR & TIM_SR_UIF) {
-        TIMx->SR &= ~TIM_SR_UIF;
-        HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_SET);
-    } else {
-        // Should not be here
-        __asm("bkpt 255");
-        __asm("bx lr");
+    /* EXTI line interrupt detected */
+    if (__HAL_GPIO_EXTI_GET_IT(SYNC_PIN) != RESET) {
+        __HAL_GPIO_EXTI_CLEAR_IT(SYNC_PIN);
+
+        if (TIMx->CNT > ((TIMx->ARR * 2) / 10) || TIMx->CNT < ((TIMx->ARR * 8) / 10)) { // Timer
+            TIMx->EGR = TIM_EGR_UG;                                                     // Reset the counter and generate update event
+        }
+
+        if (sequence_idx != 0)
+            ChangeCurrentSequence(0);
     }
 }
+
+__attribute__((optimize("O1"))) void TIMx_IRQ_Handler()
+{
+    // CC1 IRQ
+    if (TIMx->SR & TIM_SR_CC1IF) {
+        TIMx->SR &= ~TIM_SR_CC1IF;
+        NextSequence();
+    }
+
+    // Update IRQ
+    if (TIMx->SR & TIM_SR_UIF) {
+        TIMx->SR &= ~TIM_SR_UIF;
+
+        // If Sync output
+        if (g_sync_output_enabled) {
+            if (sequence_idx == 0) // At the start of sequence
+                GPIO_SET_BIT(SYNC_PORT, SYNC_PIN);
+            else // reset pin on ODD
+                GPIO_CLR_BIT(SYNC_PORT, SYNC_PIN);
+        }
+
+#ifdef DEBUG_TIM
+        HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_SET);
 #endif
+    }
+}
 
 __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 {
@@ -159,94 +259,86 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 
     static uint32_t buf[N_CHANNELS] = {0};
 
-    if (g_txir_alternate) {
+    if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
+        DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
+        for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
+            buf[i] = buffer[0][i];
+    } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
+        DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
+        for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
+            buf[i] = buffer[1][i];
+    }
 
-        static int active_tx_leds = 0; // 0 - even, 1 - odd
-
-        if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
-            DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
-            for (int i = active_tx_leds; i < N_CHANNELS; i += 2)
-                buf[i] = buffer[0][i];
-        } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
-            DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
-            for (int i = active_tx_leds; i < N_CHANNELS; i += 2)
-                buf[i] = buffer[BUFFER_SIZE / 2][i];
-        }
-
-        if (active_tx_leds == 1) {
-
-            Filter(buf);
-
-            for (int i = 0; i < N_CHANNELS; ++i) {
-                if (g_delay_ticker[i] >= 0) {
-                    if (g_delay_ticker[i]-- == 0) {
-                        VALVE_PORT->BSRR     = g_Valve_Pins[i];
-                        g_duration_ticker[i] = g_duration_ticks_param;
-                    }
-                }
-
-                if (g_duration_ticker[i] >= 0) {
-                    if (g_duration_ticker[i]-- == 0) {
-                        VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
-                    }
-                }
-            }
-        }
-
-        // Check which set (odd / even) was active and switch it (pin1 - 0 = EVEN, pin2 - 1 = ODD)
-        if (active_tx_leds == 0) { // if EVEN was active, then turn on odd
-            active_tx_leds = 1;
-            GPIO_CLR_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
-            if (g_txir2_en)
-                GPIO_SET_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
-        } else { // ODD // if ODD was active then turn on even
-            active_tx_leds = 0;
-            if (g_txir1_en)
-                GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
-            GPIO_CLR_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
-        }
-
-    } else {
-
-        if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
-            DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
-            for (int i = 0; i < N_CHANNELS; ++i)
-                buf[i] = buffer[0][i];
-        } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
-            DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
-            for (int i = 0; i < N_CHANNELS; ++i)
-                buf[i] = buffer[BUFFER_SIZE / 2][i];
-        }
-
+    if (sequence_idx == (sequence_N - 1)) // last sequence
         Filter(buf);
 
-        for (int i = 0; i < N_CHANNELS; ++i) {
-            if (g_delay_ticker[i] >= 0) {
-                if (g_delay_ticker[i]-- == 0) {
-                    VALVE_PORT->BSRR     = g_Valve_Pins[i];
-                    g_duration_ticker[i] = g_duration_ticks_param;
-                }
-            }
-
-            if (g_duration_ticker[i] >= 0) {
-                if (g_duration_ticker[i]-- == 0) {
-                    VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
-                }
+    for (int i = 0; i < N_CHANNELS; ++i) {
+        if (g_delay_ticker[i] >= 0) {
+            if (g_delay_ticker[i]-- == 0) {
+                VALVE_PORT->BSRR     = g_Valve_Pins[i];
+                g_duration_ticker[i] = g_duration_ticks_param;
             }
         }
 
-        if (g_txir1_en)
-            GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
-        else
-            GPIO_CLR_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
-
-        if (g_txir2_en)
-            GPIO_SET_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
-        else
-            GPIO_CLR_BIT(IR_LED_PORT_2, IR_LED_PIN_2);
+        if (g_duration_ticker[i] >= 0) {
+            if (g_duration_ticker[i]-- == 0) {
+                VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+            }
+        }
     }
 }
 /////////////////////////////////////
+
+void SetSequence(int* seq, int num_of_elements)
+{
+    int size = num_of_elements > sequence_N ? sequence_N : num_of_elements;
+
+    for (int i = 0; i < size; ++i) {
+        sequence[i] = seq[i];
+    }
+}
+
+char* GetSequence(char* buf, int sizeof_buf)
+{
+    snprintf(buf, sizeof_buf, "%d,%d", sequence[0], sequence[1]);
+
+    return buf;
+}
+
+void SetSyncPinAsOutput()
+{
+    g_sync_output_enabled = 1;
+
+    // GPIO
+    GPIO_InitTypeDef GPIO_InitStructure;
+    SYNC_CLK();
+    GPIO_InitStructure.Pin   = SYNC_PIN;
+    GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_OD;
+    GPIO_InitStructure.Pull  = GPIO_PULLUP;
+    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
+    HAL_GPIO_Init(SYNC_PORT, &GPIO_InitStructure);
+
+    // Disable IRQ
+    HAL_NVIC_DisableIRQ(EXTI15_10_IRQn);
+}
+
+void SetSyncPinAsInput()
+{
+    g_sync_output_enabled = 0;
+
+    // GPIO
+    GPIO_InitTypeDef GPIO_InitStructure;
+    SYNC_CLK();
+    GPIO_InitStructure.Pin   = SYNC_PIN;
+    GPIO_InitStructure.Mode  = GPIO_MODE_IT_RISING;
+    GPIO_InitStructure.Pull  = GPIO_NOPULL;
+    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
+    HAL_GPIO_Init(SYNC_PORT, &GPIO_InitStructure);
+
+    // Enable IRQ
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 1);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+}
 
 static void SystemClock_Config(void)
 {
@@ -297,7 +389,7 @@ static void SystemClock_Config(void)
     SystemCoreClockUpdate();
 }
 
-void DMA_Configure()
+static void DMA_Configure()
 {
     __HAL_RCC_DMA2_CLK_ENABLE();
 
@@ -323,7 +415,7 @@ void DMA_Configure()
     HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 }
 
-void ADC_Configure()
+static void ADC_Configure()
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
@@ -400,7 +492,7 @@ void ADC_Configure()
     }
 }
 
-void TIM_Configure()
+static void TIM_Configure()
 {
     TIMx_CLK_ENALBE();
 
@@ -408,33 +500,29 @@ void TIM_Configure()
     TIMx->CR2  = TIM_TRGO_UPDATE;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
-    TIMx->DIER = 0;
+    TIMx->DIER = TIM_DIER_CC1IE | TIM_DIER_UIE;
     TIMx->CR1  = TIM_CR1_CEN;
 
-#ifdef DEBUG_TIM
-    TIMx->DIER = TIM_DIER_UIE;
-
-    HAL_NVIC_SetPriority(TIMx_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(TIMx_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(TIMx_IRQn);
-#endif
 }
 
-void GPIO_Configure()
+static void GPIO_Configure()
 {
     GPIO_InitTypeDef GPIO_InitStructure;
 
     // IR LED 1
-    IR_LED_CLK_1();
-    GPIO_InitStructure.Pin   = IR_LED_PIN_1;
+    IR_LED_EVEN_CLK();
+    GPIO_InitStructure.Pin   = IR_LED_EVEN_PIN;
     GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStructure.Pull  = GPIO_NOPULL;
     GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
-    HAL_GPIO_Init(IR_LED_PORT_1, &GPIO_InitStructure);
+    HAL_GPIO_Init(IR_LED_EVEN_PORT, &GPIO_InitStructure);
 
     // IR LED 2
-    IR_LED_CLK_2();
-    GPIO_InitStructure.Pin = IR_LED_PIN_2;
-    HAL_GPIO_Init(IR_LED_PORT_2, &GPIO_InitStructure);
+    IR_LED_ODD_CLK();
+    GPIO_InitStructure.Pin = IR_LED_ODD_PIN;
+    HAL_GPIO_Init(IR_LED_ODD_PORT, &GPIO_InitStructure);
 
     // Valve GPIO
     VALVE_CLK_ENABLE();
@@ -454,11 +542,15 @@ void GPIO_Configure()
 #endif
 }
 
-void EXTI_Configure()
+static void EXTI_Configure()
 {
+    // UART
     EXTI->IMR |= EXTI_IMR_IM0;
     HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+    // Sync pin
+    SetSyncPinAsInput();
 }
 
 static void USB_Init()
@@ -488,8 +580,6 @@ static void Init()
 
     UART_Init();
 
-    GPIO_SET_BIT(IR_LED_PORT_1, IR_LED_PIN_1);
-
 #ifdef STOPWATCH
     EnableCC();
 #endif
@@ -510,6 +600,7 @@ void SetSampleFrequency(int freq_hz)
 {
     int sample_every_N_counts = TIM_COUNT_FREQ / freq_hz;
     TIMx->ARR                 = sample_every_N_counts - 1;
+    TIMx->CCR1                = TIMx->ARR / 2;
     TIMx->EGR                 = TIM_EGR_UG;
 }
 

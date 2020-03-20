@@ -16,3 +16,7 @@ typedef struct {
 
 void     SetSampleFrequency(int freq_hz);
 uint32_t GetSampleFrequency();
+void     SetSequence(int* seq, int num_of_elements);
+char*    GetSequence(char* buf, int sizeof_buf);
+void     SetSyncPinAsOutput();
+void     SetSyncPinAsInput();
