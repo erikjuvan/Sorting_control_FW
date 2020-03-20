@@ -73,15 +73,18 @@ extern char g_VCPInitialized;
 
 // Timer
 #define TIMx TIM1
+#define TIMx_CLK_SOURCE_APB2 // TIM1 is under APB2
 #define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
-#define TIMx_IRQ_Handler TIM1_UP_TIM10_IRQHandler
-#define TIMx_IRQn TIM1_UP_TIM10_IRQn
+#define TIMx_UP_IRQ_Handler TIM1_UP_TIM10_IRQHandler
+#define TIMx_CC_IRQ_Handler TIM1_CC_IRQHandler
+#define TIMx_UP_IRQn TIM1_UP_TIM10_IRQn
+#define TIMx_CC_IRQn TIM1_CC_IRQn
 
 // GPIO pins for debugging
-#define DEBUG_PORT GPIOB
-#define DEBUG_PORT_CLK __GPIOB_CLK_ENABLE
-#define DEBUG_PIN_1 GPIO_PIN_4
-#define DEBUG_PIN_2 GPIO_PIN_2
+#define DEBUG_PORT GPIOE
+#define DEBUG_PORT_CLK __GPIOE_CLK_ENABLE
+#define DEBUG_PIN_1 GPIO_PIN_14
+#define DEBUG_PIN_2 GPIO_PIN_15
 
 #define DEBUG_TIM
 //#define STOPWATCH
@@ -223,14 +226,18 @@ __attribute__((optimize("O1"))) void EXTI15_10_IRQHandler(void)
     }
 }
 
-__attribute__((optimize("O1"))) void TIMx_IRQ_Handler()
+__attribute__((optimize("O1"))) void TIMx_CC_IRQ_Handler()
 {
     // CC1 IRQ
     if (TIMx->SR & TIM_SR_CC1IF) {
         TIMx->SR &= ~TIM_SR_CC1IF;
         NextSequence();
     }
+}
 
+__attribute__((optimize("O1"))) void
+TIMx_UP_IRQ_Handler()
+{
     // Update IRQ
     if (TIMx->SR & TIM_SR_UIF) {
         TIMx->SR &= ~TIM_SR_UIF;
@@ -242,21 +249,11 @@ __attribute__((optimize("O1"))) void TIMx_IRQ_Handler()
             else // reset pin on ODD
                 GPIO_CLR_BIT(SYNC_PORT, SYNC_PIN);
         }
-
-#ifdef DEBUG_TIM
-        HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_SET);
-#endif
     }
 }
 
 __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 {
-
-#ifdef DEBUG_TIM
-    HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN_1, GPIO_PIN_RESET);
-    HAL_GPIO_TogglePin(DEBUG_PORT, DEBUG_PIN_2);
-#endif
-
     static uint32_t buf[N_CHANNELS] = {0};
 
     if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
@@ -496,15 +493,29 @@ static void TIM_Configure()
 {
     TIMx_CLK_ENALBE();
 
-    TIMx->PSC  = (uint32_t)((SystemCoreClock / 2) / TIM_COUNT_FREQ) - 1; // Set prescaler to count with 1 us period
+    // NOTE: Timer clocks can be tricky since they can be different from the bus frequency, so when in doubt check the datasheet.
+#if defined(TIMx_CLK_SOURCE_APB1)
+    uint32_t timer_freq = HAL_RCC_GetPCLK1Freq();
+    if (RCC->CFGR & RCC_CFGR_PPRE1_2) // if MSB is not zero (clk divison by more than 1)
+        timer_freq *= 2;
+#elif defined(TIMx_CLK_SOURCE_APB2)
+    uint32_t timer_freq = HAL_RCC_GetPCLK2Freq();
+    if (RCC->CFGR & RCC_CFGR_PPRE2_2) // if MSB is not zero (clk divison by more than 1)
+        timer_freq *= 2;
+#endif
+
+    TIMx->PSC  = (uint32_t)(timer_freq / TIM_COUNT_FREQ) - 1; // Set prescaler to count with 1/TIM_COUNT_FREQ period
     TIMx->CR2  = TIM_TRGO_UPDATE;
     TIMx->EGR  = TIM_EGR_UG; // Reset the counter and generate update event
     TIMx->SR   = 0;          // Clear interrupts
     TIMx->DIER = TIM_DIER_CC1IE | TIM_DIER_UIE;
     TIMx->CR1  = TIM_CR1_CEN;
 
-    HAL_NVIC_SetPriority(TIMx_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(TIMx_IRQn);
+    HAL_NVIC_SetPriority(TIMx_UP_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIMx_UP_IRQn);
+
+    HAL_NVIC_SetPriority(TIMx_CC_IRQn, 1, 1);
+    HAL_NVIC_EnableIRQ(TIMx_CC_IRQn);
 }
 
 static void GPIO_Configure()
