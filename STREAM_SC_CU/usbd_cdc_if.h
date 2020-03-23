@@ -42,6 +42,8 @@ extern USBD_CDC_ItfTypeDef USBD_CDC_STREAM_SC_CU_fops;
 
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
+int VCP_read(void* pBuffer, int size);
+int VCP_write(const void* pBuffer, int size);
 
 #ifdef __cplusplus
 }

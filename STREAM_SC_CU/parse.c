@@ -12,8 +12,6 @@
 
 extern Mode g_mode;
 
-extern Header header;
-
 extern int g_training;
 extern int g_verbose_level;
 
@@ -28,8 +26,6 @@ extern float g_lpf2_K;
 extern float g_threshold;
 
 extern uint8_t UART_Address;
-
-extern int g_sync_output_enabled;
 
 const static char Delims[] = "\n\r\t, ";
 
@@ -63,7 +59,7 @@ static void Function_VRBS(char* str, write_func Write)
 
     // Reset packet ID when entering verbose mode
     if (verbose_lvl != 0)
-        header.packet_id = 0;
+        ResetHeaderID();
 
     g_verbose_level = verbose_lvl;
 

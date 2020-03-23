@@ -1,6 +1,5 @@
 #include "stm32f7xx_hal.h"
-
-int VCP_read(void* pBuffer, int size);
+#include "usbd_cdc_if.h"
 
 ////////////////////////////
 // Counting cycles using DWT

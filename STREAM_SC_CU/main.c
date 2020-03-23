@@ -13,6 +13,46 @@
 #include "parse.h"
 #include "uart.h"
 
+#define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
+#define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
+
+#define DEBUG_TIM
+//#define STOPWATCH
+
+// GPIO pins for debugging
+#define DEBUG_PORT GPIOE
+#define DEBUG_PORT_CLK __GPIOE_CLK_ENABLE
+#define DEBUG_PIN_1 GPIO_PIN_14
+#define DEBUG_PIN_2 GPIO_PIN_15
+
+// IR TX LEDs EVEN
+#define IR_LED_EVEN_PORT GPIOA
+#define IR_LED_EVEN_PIN GPIO_PIN_8
+#define IR_LED_EVEN_CLK __GPIOA_CLK_ENABLE
+// IR TX LEDs ODD
+#define IR_LED_ODD_PORT GPIOB
+#define IR_LED_ODD_PIN GPIO_PIN_6
+#define IR_LED_ODD_CLK __GPIOB_CLK_ENABLE
+
+// SYNC PIN
+#define SYNC_PORT GPIOA
+#define SYNC_PIN GPIO_PIN_10
+#define SYNC_CLK __GPIOA_CLK_ENABLE
+
+// Timer
+#define TIMx TIM1
+#define TIMx_CLK_SOURCE_APB2 // TIM1 is under APB2
+#define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
+#define TIMx_UP_IRQ_Handler TIM1_UP_TIM10_IRQHandler
+#define TIMx_CC_IRQ_Handler TIM1_CC_IRQHandler
+#define TIMx_UP_IRQn TIM1_UP_TIM10_IRQn
+#define TIMx_CC_IRQn TIM1_CC_IRQn
+
+// Valves
+#define VALVE_PORT GPIOD
+#define VALVE_PINS (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
+#define VALVE_CLK_ENABLE __GPIOD_CLK_ENABLE
+
 typedef union {
     uint64_t u64;
     struct {
@@ -28,84 +68,20 @@ typedef union {
     } f32;
 } ProtocolDataType;
 
-USBD_HandleTypeDef       USBD_Device;
-void                     SysTick_Handler(void);
-void                     OTG_FS_IRQHandler(void);
-void                     OTG_HS_IRQHandler(void);
+typedef enum {
+    OFF  = 0,
+    EVEN = 1,
+    ODD  = 2,
+    ALL  = 3
+} ActiveLEDs;
+
 extern PCD_HandleTypeDef hpcd;
 
-int         VCP_read(void* pBuffer, int size);
-int         VCP_write(const void* pBuffer, int size);
 extern char g_VCPInitialized;
-
-#define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
-#define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
-
-/*
-// IR TX LEDs EVEN
-#define IR_LED_EVEN_PORT GPIOA
-#define IR_LED_EVEN_PIN GPIO_PIN_8
-#define IR_LED_EVEN_CLK __GPIOA_CLK_ENABLE
-// IR TX LEDs ODD
-#define IR_LED_ODD_PORT GPIOB
-#define IR_LED_ODD_PIN GPIO_PIN_6
-#define IR_LED_ODD_CLK __GPIOB_CLK_ENABLE
-
-// SYNC PIN
-#define SYNC_PORT GPIOA
-#define SYNC_PIN GPIO_PIN_10
-#define SYNC_CLK __GPIOA_CLK_ENABLE
-*/
-
-// Za testiranje na NUCLEO boardu uporabljam port E
-// IR TX LEDs EVEN
-#define IR_LED_EVEN_PORT GPIOE
-#define IR_LED_EVEN_PIN GPIO_PIN_11
-#define IR_LED_EVEN_CLK __GPIOE_CLK_ENABLE
-// IR TX LEDs ODD
-#define IR_LED_ODD_PORT GPIOE
-#define IR_LED_ODD_PIN GPIO_PIN_12
-#define IR_LED_ODD_CLK __GPIOE_CLK_ENABLE
-// SYNC PIN
-#define SYNC_PORT GPIOE
-#define SYNC_PIN GPIO_PIN_10
-#define SYNC_CLK __GPIOE_CLK_ENABLE
-
-// Timer
-#define TIMx TIM1
-#define TIMx_CLK_SOURCE_APB2 // TIM1 is under APB2
-#define TIMx_CLK_ENALBE __TIM1_CLK_ENABLE
-#define TIMx_UP_IRQ_Handler TIM1_UP_TIM10_IRQHandler
-#define TIMx_CC_IRQ_Handler TIM1_CC_IRQHandler
-#define TIMx_UP_IRQn TIM1_UP_TIM10_IRQn
-#define TIMx_CC_IRQn TIM1_CC_IRQn
-
-// GPIO pins for debugging
-#define DEBUG_PORT GPIOE
-#define DEBUG_PORT_CLK __GPIOE_CLK_ENABLE
-#define DEBUG_PIN_1 GPIO_PIN_14
-#define DEBUG_PIN_2 GPIO_PIN_15
-
-#define DEBUG_TIM
-//#define STOPWATCH
-
-static void Filter(uint32_t* x);
 
 Mode g_mode = CONFIG;
 
-ADC_HandleTypeDef ADC1_Handle;
-DMA_HandleTypeDef DMA2_Handle;
-
-#define BUFFER_SIZE 2
-uint32_t buffer[BUFFER_SIZE][N_CHANNELS] = {0};
-
-#define DATA_PER_CHANNEL 100
-#define SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
-uint32_t          send_buffer_i                    = 0;
-int               send_buffer_alt                  = 0;
-ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0};
-ProtocolDataType* p_send_buffer;
-Header            header = {0xDEADBEEF, 0};
+USBD_HandleTypeDef USBD_Device;
 
 // Sorting parameters
 // NOTE! - units are ticks NOT time units e.g. ms
@@ -129,9 +105,6 @@ int32_t g_duration_ticker[N_CHANNELS] = {-1, -1, -1, -1, -1, -1, -1, -1};
 
 int g_verbose_level = 0;
 
-#define VALVE_PORT GPIOD
-#define VALVE_PINS (GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7)
-#define VALVE_CLK_ENABLE __GPIOD_CLK_ENABLE
 uint16_t g_Valve_Pins[N_CHANNELS] = {GPIO_PIN_7, GPIO_PIN_6, GPIO_PIN_5, GPIO_PIN_4, GPIO_PIN_3, GPIO_PIN_2, GPIO_PIN_1, GPIO_PIN_0};
 
 uint8_t g_writeToPC = 0;
@@ -143,61 +116,34 @@ int   g_system_trained = 0;
 int   g_training       = 0;
 float g_trained_coeffs[N_CHANNELS];
 
+static void Filter(uint32_t* x);
+static void SetIRLEDs(ActiveLEDs activate_led);
+static void ChangeCurrentSequence(unsigned int si);
+static void NextSequence();
+
+static ADC_HandleTypeDef ADC1_Handle;
+static DMA_HandleTypeDef DMA2_Handle;
+
+static uint32_t buffer[2][N_CHANNELS] = {0}; // size 2 to allow for alternating read/writes, to make sure we aren't reading while the DMA is overwritting
+
+#define DATA_PER_CHANNEL 100
+#define SEND_BUFFER_SIZE (N_CHANNELS * DATA_PER_CHANNEL)
+static uint32_t          send_buffer_i                    = 0;
+static int               send_buffer_alt                  = 0;
+static ProtocolDataType  send_buffer[2][SEND_BUFFER_SIZE] = {0}; // size 2 to allow for alternating read/writes, to make sure we aren't reading while the DMA is overwritting
+static ProtocolDataType* p_send_buffer;
+static Header            header = {0xDEADBEEF, 0};
+
 static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
 
 // IR LEDs
 /////////////////////////////////////
-typedef enum {
-    OFF  = 0,
-    EVEN = 1,
-    ODD  = 2,
-    ALL  = 3
-} ActiveLEDs;
+static ActiveLEDs         sequence[]   = {ALL, ALL}; // default sequence.
+static unsigned int       sequence_idx = 0;
+static const unsigned int sequence_N   = sizeof(sequence) / sizeof(sequence[0]);
 
-ActiveLEDs         sequence[]   = {ALL, ALL}; // default sequence.
-unsigned int       sequence_idx = 0;
-const unsigned int sequence_N   = sizeof(sequence) / sizeof(sequence[0]);
-
-int g_sync_output_enabled = 0;
+static int sync_output_enabled = 0;
 /////////////////////////////////////
-
-static void SetIRLEDs(ActiveLEDs activate_led)
-{
-    switch (activate_led) {
-    case OFF:
-        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
-        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
-        break;
-    case EVEN:
-        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
-        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
-        break;
-    case ODD:
-        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
-        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
-        break;
-    case ALL:
-    default:
-        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
-        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
-        break;
-    }
-}
-
-static void ChangeCurrentSequence(unsigned int si)
-{
-    if (si < sequence_N)
-        sequence_idx = si;
-    else
-        sequence_idx = 0;
-
-    SetIRLEDs(sequence[sequence_idx]);
-}
-
-static void NextSequence()
-{
-    ChangeCurrentSequence(sequence_idx + 1);
-}
 
 // IRQ
 /////////////////////////////////////
@@ -216,9 +162,11 @@ __attribute__((optimize("O1"))) void EXTI15_10_IRQHandler(void)
     /* EXTI line interrupt detected */
     if (__HAL_GPIO_EXTI_GET_IT(SYNC_PIN) != RESET) {
         __HAL_GPIO_EXTI_CLEAR_IT(SYNC_PIN);
+        uint32_t cnt = TIMx->CNT;
+        uint32_t arr = TIMx->ARR;
 
-        if (TIMx->CNT > ((TIMx->ARR * 2) / 10) || TIMx->CNT < ((TIMx->ARR * 8) / 10)) { // Timer
-            TIMx->EGR = TIM_EGR_UG;                                                     // Reset the counter and generate update event
+        if (cnt > ((arr * 2) / 10) || cnt < ((arr * 8) / 10)) {
+            TIMx->EGR = TIM_EGR_UG; // Reset the counter and generate update event
         }
 
         if (sequence_idx != 0)
@@ -243,7 +191,7 @@ TIMx_UP_IRQ_Handler()
         TIMx->SR &= ~TIM_SR_UIF;
 
         // If Sync output
-        if (g_sync_output_enabled) {
+        if (sync_output_enabled) {
             if (sequence_idx == 0) // At the start of sequence
                 GPIO_SET_BIT(SYNC_PORT, SYNC_PIN);
             else // reset pin on ODD
@@ -304,7 +252,7 @@ char* GetSequence(char* buf, int sizeof_buf)
 
 void SetSyncPinAsOutput()
 {
-    g_sync_output_enabled = 1;
+    sync_output_enabled = 1;
 
     // GPIO
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -321,7 +269,7 @@ void SetSyncPinAsOutput()
 
 void SetSyncPinAsInput()
 {
-    g_sync_output_enabled = 0;
+    sync_output_enabled = 0;
 
     // GPIO
     GPIO_InitTypeDef GPIO_InitStructure;
@@ -335,6 +283,25 @@ void SetSyncPinAsInput()
     // Enable IRQ
     HAL_NVIC_SetPriority(EXTI15_10_IRQn, 2, 1);
     HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+}
+
+void SetSampleFrequency(int freq_hz)
+{
+    int sample_every_N_counts = TIM_COUNT_FREQ / freq_hz;
+    TIMx->ARR                 = sample_every_N_counts - 1;
+    TIMx->CCR1                = TIMx->ARR / 2;
+    TIMx->EGR                 = TIM_EGR_UG;
+}
+
+uint32_t GetSampleFrequency()
+{
+    int sample_every_N_counts = TIMx->ARR + 1;
+    return TIM_COUNT_FREQ / sample_every_N_counts;
+}
+
+void ResetHeaderID()
+{
+    header.packet_id = 0;
 }
 
 static void SystemClock_Config(void)
@@ -602,23 +569,47 @@ static void Init()
     // reset counter just to be sure it's 0 at start
     header.packet_id = 0;
 
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
 
     USB_Init();
 }
 
-void SetSampleFrequency(int freq_hz)
+static void SetIRLEDs(ActiveLEDs activate_led)
 {
-    int sample_every_N_counts = TIM_COUNT_FREQ / freq_hz;
-    TIMx->ARR                 = sample_every_N_counts - 1;
-    TIMx->CCR1                = TIMx->ARR / 2;
-    TIMx->EGR                 = TIM_EGR_UG;
+    switch (activate_led) {
+    case OFF:
+        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    case EVEN:
+        GPIO_CLR_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        break;
+    case ODD:
+        GPIO_CLR_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    case ALL:
+    default:
+        GPIO_SET_BIT(IR_LED_EVEN_PORT, IR_LED_EVEN_PIN);
+        GPIO_SET_BIT(IR_LED_ODD_PORT, IR_LED_ODD_PIN);
+        break;
+    }
 }
 
-uint32_t GetSampleFrequency()
+static void ChangeCurrentSequence(unsigned int si)
 {
-    int sample_every_N_counts = TIMx->ARR + 1;
-    return TIM_COUNT_FREQ / sample_every_N_counts;
+    if (si < sequence_N)
+        sequence_idx = si;
+    else
+        sequence_idx = 0;
+
+    SetIRLEDs(sequence[sequence_idx]);
+}
+
+static void NextSequence()
+{
+    ChangeCurrentSequence(sequence_idx + 1);
 }
 
 static void Train()
@@ -660,7 +651,7 @@ static void Train()
 
     HAL_ADC_Stop(&ADC1_Handle);
     ADC_Configure();
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), BUFFER_SIZE * N_CHANNELS);
+    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
 
     g_system_trained = 1;
 }

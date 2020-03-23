@@ -2,14 +2,12 @@
 #include "main.h"
 #include "parse.h"
 #include "uart.h"
+#include "usbd_cdc_if.h"
 #include <string.h>
 
 extern uint8_t       UART_Address;
 extern const uint8_t CharacterMatch;
 extern Mode          g_mode;
-
-int VCP_read(void* pBuffer, int size);
-int VCP_write(const void* pBuffer, int size);
 
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
 static int     rx_buffer_size = 0;
