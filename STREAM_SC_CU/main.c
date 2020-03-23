@@ -165,7 +165,7 @@ __attribute__((optimize("O1"))) void EXTI15_10_IRQHandler(void)
         uint32_t cnt = TIMx->CNT;
         uint32_t arr = TIMx->ARR;
 
-        if (cnt > ((arr * 2) / 10) || cnt < ((arr * 8) / 10)) {
+        if (cnt > ((arr * 2) / 10) && cnt < ((arr * 8) / 10)) {
             TIMx->EGR = TIM_EGR_UG; // Reset the counter and generate update event
         }
 
