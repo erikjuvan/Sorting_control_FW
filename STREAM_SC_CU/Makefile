@@ -124,6 +124,7 @@ all: $(PRIMARY_OUTPUTS)
 
 $(BINARYDIR)/$(basename $(TARGETNAME)).bin: $(BINARYDIR)/$(TARGETNAME)
 	$(OBJCOPY) -O binary $< $@
+	copy $(BINARYDIR)\$(basename $(TARGETNAME)).bin ..\bin\
 
 $(BINARYDIR)/$(basename $(TARGETNAME)).ihex: $(BINARYDIR)/$(TARGETNAME)
 	$(OBJCOPY) -O ihex $< $@
