@@ -16,14 +16,19 @@
 #define GPIO_SET_BIT(PORT, BIT) PORT->BSRR = BIT
 #define GPIO_CLR_BIT(PORT, BIT) PORT->BSRR = (BIT << 16)
 
-#define DEBUG_TIM
+//#define DEBUG_MODE
 //#define STOPWATCH
 
 // GPIO pins for debugging
 #define DEBUG_PORT GPIOE
 #define DEBUG_PORT_CLK __GPIOE_CLK_ENABLE
-#define DEBUG_PIN_1 GPIO_PIN_14
-#define DEBUG_PIN_2 GPIO_PIN_15
+#define DEBUG_PIN_0 GPIO_PIN_10
+#define DEBUG_PIN_1 GPIO_PIN_11
+#define DEBUG_PIN_2 GPIO_PIN_12
+#define DEBUG_PIN_3 GPIO_PIN_13
+#define DEBUG_PIN_4 GPIO_PIN_14
+#define DEBUG_PIN_5 GPIO_PIN_15
+#define DEBUG_ALL_PINS (DEBUG_PIN_0 | DEBUG_PIN_1 | DEBUG_PIN_2 | DEBUG_PIN_3 | DEBUG_PIN_4 | DEBUG_PIN_5)
 
 // IR TX LEDs EVEN
 #define IR_LED_EVEN_PORT GPIOA
@@ -138,7 +143,7 @@ static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
 
 // IR LEDs
 /////////////////////////////////////
-static ActiveLEDs         sequence[]   = {ALL, ALL}; // default sequence.
+static ActiveLEDs         sequence[]   = {ALL, ALL}; // TODO: What should be the default sequence, OFF or ALL?
 static unsigned int       sequence_idx = 0;
 static const unsigned int sequence_N   = sizeof(sequence) / sizeof(sequence[0]);
 
@@ -398,13 +403,13 @@ static void ADC_Configure()
     HAL_GPIO_Init(GPIOC, &GPIO_InitStructure);
 
     ADC1_Handle.Instance                   = ADC1;
-    ADC1_Handle.Init.ClockPrescaler        = ADC_CLOCKPRESCALER_PCLK_DIV4; // ADC_CLOCKPRESCALER_PCLK_DIV2
+    ADC1_Handle.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV2;
     ADC1_Handle.Init.Resolution            = ADC_RESOLUTION_12B;
     ADC1_Handle.Init.ScanConvMode          = ENABLE;
-    ADC1_Handle.Init.ContinuousConvMode    = DISABLE; // ENABLE
+    ADC1_Handle.Init.ContinuousConvMode    = DISABLE;
     ADC1_Handle.Init.DiscontinuousConvMode = DISABLE;
     ADC1_Handle.Init.NbrOfDiscConversion   = 0;
-    ADC1_Handle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_RISING;
+    ADC1_Handle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_RISINGFALLING; // TODO: why RISINGFALLING insted of just RISING
     ADC1_Handle.Init.ExternalTrigConv      = ADC_EXTERNALTRIGCONV_T1_TRGO;
     ADC1_Handle.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
     ADC1_Handle.Init.NbrOfConversion       = N_CHANNELS;
@@ -414,7 +419,7 @@ static void ADC_Configure()
 
     ADC_ChannelConfTypeDef adcChannelConfig;
 
-    adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES; // ADC_SAMPLETIME_84CYCLES
+    adcChannelConfig.SamplingTime = ADC_SAMPLETIME_56CYCLES;
     adcChannelConfig.Channel      = ADC_CHANNEL_9;
     adcChannelConfig.Rank         = 1;
     if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
@@ -510,12 +515,12 @@ static void GPIO_Configure()
     GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
     HAL_GPIO_Init(VALVE_PORT, &GPIO_InitStructure);
 
-#ifdef DEBUG_TIM
+#ifdef DEBUG_MODE
     DEBUG_PORT_CLK();
-    GPIO_InitStructure.Pin   = DEBUG_PIN_1 | DEBUG_PIN_2;
+    GPIO_InitStructure.Pin   = DEBUG_ALL_PINS;
     GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStructure.Pull  = GPIO_NOPULL;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_LOW; // GPIO_SPEED_FREQ_HIGH
+    GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_MEDIUM; // GPIO_SPEED_FREQ_HIGH
     HAL_GPIO_Init(DEBUG_PORT, &GPIO_InitStructure);
 #endif
 }
