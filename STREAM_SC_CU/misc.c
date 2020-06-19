@@ -1,3 +1,18 @@
+/// @file misc.c
+/// <summary>
+/// Miscellaneous helper functions.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
+
 #include "stm32f7xx_hal.h"
 #include "usbd_cdc_if.h"
 

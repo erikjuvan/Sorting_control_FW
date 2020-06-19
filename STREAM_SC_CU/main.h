@@ -1,6 +1,6 @@
 #pragma once
 
-#define SWVER "SC_CU_FW V1.3.0.0"
+#define SWVER "SC_CU_FW V1.3.0.1"
 #define HWVER "N/A"
 #define COMPATIBILITYMODE "N/A"
 

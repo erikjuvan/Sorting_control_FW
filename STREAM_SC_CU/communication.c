@@ -1,3 +1,18 @@
+/// @file communication.c
+/// <summary>
+/// USB and UART communication library using lower level USB and UART driver functions.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
+
 #include "communication.h"
 #include "main.h"
 #include "parse.h"
@@ -12,8 +27,11 @@ extern Mode          g_mode;
 static uint8_t rx_buffer[UART_BUFFER_SIZE];
 static int     rx_buffer_size = 0;
 
-// UART driver Callback
-///////////////////////
+static void UART_RX_Process();
+
+//---------------------------------------------------------------------
+/// <summary> See uart.c for documentation. </summary>
+//---------------------------------------------------------------------
 void UART_RX_Complete_Callback(const uint8_t* data, int size)
 {
     rx_buffer_size = size;
@@ -21,18 +39,22 @@ void UART_RX_Complete_Callback(const uint8_t* data, int size)
     rx_buffer[size] = 0;
     EXTI->SWIER     = EXTI_SWIER_SWIER0; // This triggers EXTI interrupt
 }
-///////////////////////
 
-// IRQ
-//////
-static void UART_RX_Process();
-void        EXTI0_IRQHandler(void)
+//---------------------------------------------------------------------
+/// <summary> External interrupt on line 0 interrupt handler.
+/// This handler is called via software IRQ when data from UART
+/// is recevied in its entirety. </summary>
+//---------------------------------------------------------------------
+void EXTI0_IRQHandler(void)
 {
     EXTI->PR = EXTI_PR_PR0; // Clear pending bit
     UART_RX_Process();
 }
-//////
 
+//---------------------------------------------------------------------
+/// <summary> Process received data from UART and pass it to the next
+/// module via weak callback function. </summary>
+//---------------------------------------------------------------------
 static void UART_RX_Process()
 {
     // If we are in sorting mode then extract data
@@ -54,11 +76,29 @@ static void UART_RX_Process()
     COM_UART_RX_Complete_Callback(rx_buffer, rx_buffer_size);
 }
 
-// External callback - this function should contain per-program needed functionality, as so making sense to not include that code here
+//---------------------------------------------------------------------
+/// <summary> Weak callback function that communication driver calls after
+/// receving data from UART. UART COM Read is implemented via interrupt
+/// to be as quick as possible to react to incoming PLC data.
+/// To be implemented by the user! </summary>
+///
+/// <param name="buf"> Pointer to a buffer that is holding received data. </param>
+/// <param name="max_size"> Number of bytes in buffer. </param>
+//---------------------------------------------------------------------
 __weak void COM_UART_RX_Complete_Callback(uint8_t* buf, int size)
 {
+    UNUSED(buf);
+    UNUSED(size);
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write data to UART. </summary>
+///
+/// <param name="buffer"> Pointer to a buffer from which to write data. </param>
+/// <param name="size"> Number of bytes to write. </param>
+///
+/// <returns> Number of written bytes </returns>
+//---------------------------------------------------------------------
 int UARTWrite(const uint8_t* buffer, int size)
 {
     uint8_t buf[UART_BUFFER_SIZE];
@@ -96,6 +136,14 @@ int UARTWrite(const uint8_t* buffer, int size)
     return len;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Read data from USB. </summary>
+///
+/// <param name="buffer"> Pointer to a buffer to read data into. </param>
+/// <param name="max_size"> Maximum number of bytes to read into buffer. </param>
+///
+/// <returns> Number of read bytes </returns>
+//---------------------------------------------------------------------
 int USBRead(uint8_t* buffer, int max_size)
 {
     static uint32_t last_read_tick = 0;
@@ -118,6 +166,14 @@ int USBRead(uint8_t* buffer, int max_size)
     return 0;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write data to USB. </summary>
+///
+/// <param name="buffer"> Pointer to a buffer from which to write data. </param>
+/// <param name="size"> Number of bytes to write. </param>
+///
+/// <returns> Number of written bytes </returns>
+//---------------------------------------------------------------------
 int USBWrite(const uint8_t* buffer, int size)
 {
     uint8_t buf[UART_BUFFER_SIZE];

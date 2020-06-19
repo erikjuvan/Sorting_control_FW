@@ -1,3 +1,18 @@
+/// @file uart.c
+/// <summary>
+/// UART driver.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
+
 #include "uart.h"
 #include "flash.h"
 #include <string.h>
@@ -17,6 +32,9 @@ static struct {
     int     i, size;
 } uart_tx_buffer = {.i = 0, .size = 0};
 
+//---------------------------------------------------------------------
+/// <summary> UART interrupt handler. </summary>
+//---------------------------------------------------------------------
 void USARTx_IRQHandler()
 {
     uint32_t isrflags = USARTx->ISR;
@@ -43,6 +61,12 @@ void USARTx_IRQHandler()
     }
 }
 
+//---------------------------------------------------------------------
+/// <summary> Definition of a weak function from HAL library, used to
+/// initialize UART periphery. </summary>
+///
+/// <param name="huart"> Pointer to UART_HandleTypeDef struct. </param>
+//---------------------------------------------------------------------
 void HAL_UART_MspInit(UART_HandleTypeDef* huart)
 {
     GPIO_InitTypeDef GPIO_InitStruct;
@@ -85,6 +109,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef* huart)
     HAL_GPIO_Init(USARTx_DE_GPIO_PORT, &GPIO_InitStruct);
 }
 
+//---------------------------------------------------------------------
+/// <summary> Set uC UART address (using multiprocessor mode). </summary>
+///
+/// <param name="addr"> UART address of uC. </param>
+//---------------------------------------------------------------------
 void UART_Set_Address(uint8_t addr)
 {
     if (addr <= 127) {
@@ -99,6 +128,9 @@ void UART_Set_Address(uint8_t addr)
     }
 }
 
+//---------------------------------------------------------------------
+/// <summary> Initialize UART module for RS485/422 mode in multiprocessor mode. </summary>
+//---------------------------------------------------------------------
 void UART_Init()
 {
     UartHandle.Instance = USARTx;
@@ -126,6 +158,14 @@ void UART_Init()
     USARTx->CR1 |= USART_CR1_RXNEIE;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write data to UART. </summary>
+///
+/// <param name="data"> Pointer to buffer to write data from. </param>
+/// <param name="size"> Number of bytes to write. </param>
+///
+/// <returns> Number of bytes written.  </returns>
+//---------------------------------------------------------------------
 int UART_Write(const uint8_t* data, int size)
 {
     // Disable UART transmission to prevent uart_tx_buffer corruption
@@ -150,7 +190,13 @@ int UART_Write(const uint8_t* data, int size)
     return uart_tx_buffer.size - uart_tx_buffer.i; // return remaining
 }
 
-// Weak callback functions - to be implemented by the user in protocol specific section
+//---------------------------------------------------------------------
+/// <summary> Weak callback function that UART driver calls after
+/// receving entire data. To be implemented by higher level communication library! </summary>
+///
+/// <param name="data"> Pointer to a buffer that is holding received data. </param>
+/// <param name="size"> Number of bytes received. </param>
+//---------------------------------------------------------------------
 __weak void UART_RX_Complete_Callback(const uint8_t* data, int size)
 {
     UNUSED(data);

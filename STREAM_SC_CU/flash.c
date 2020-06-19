@@ -1,25 +1,47 @@
+/// @file flash.c
+/// <summary>
+/// FLASH driver.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
+
 #include "flash.h"
 
 #define FLASH_USER_START_ADDR ADDR_FLASH_SECTOR_5     /* Start @ of user Flash area */
 #define FLASH_USER_END_ADDR (ADDR_FLASH_SECTOR_6 - 1) /* End @ of user Flash area */
 
-static uint32_t GetSector(uint32_t Address)
+//---------------------------------------------------------------------
+/// <summary> Get FLASH sector number. </summary>
+///
+/// <param name="address"> Address. </param>
+///
+/// <returns> Sector number of given address.  </returns>
+//---------------------------------------------------------------------
+static uint32_t GetSector(uint32_t address)
 {
     uint32_t sector = 0;
 
-    if ((Address < ADDR_FLASH_SECTOR_1) && (Address >= ADDR_FLASH_SECTOR_0)) {
+    if ((address < ADDR_FLASH_SECTOR_1) && (address >= ADDR_FLASH_SECTOR_0)) {
         sector = FLASH_SECTOR_0;
-    } else if ((Address < ADDR_FLASH_SECTOR_2) && (Address >= ADDR_FLASH_SECTOR_1)) {
+    } else if ((address < ADDR_FLASH_SECTOR_2) && (address >= ADDR_FLASH_SECTOR_1)) {
         sector = FLASH_SECTOR_1;
-    } else if ((Address < ADDR_FLASH_SECTOR_3) && (Address >= ADDR_FLASH_SECTOR_2)) {
+    } else if ((address < ADDR_FLASH_SECTOR_3) && (address >= ADDR_FLASH_SECTOR_2)) {
         sector = FLASH_SECTOR_2;
-    } else if ((Address < ADDR_FLASH_SECTOR_4) && (Address >= ADDR_FLASH_SECTOR_3)) {
+    } else if ((address < ADDR_FLASH_SECTOR_4) && (address >= ADDR_FLASH_SECTOR_3)) {
         sector = FLASH_SECTOR_3;
-    } else if ((Address < ADDR_FLASH_SECTOR_5) && (Address >= ADDR_FLASH_SECTOR_4)) {
+    } else if ((address < ADDR_FLASH_SECTOR_5) && (address >= ADDR_FLASH_SECTOR_4)) {
         sector = FLASH_SECTOR_4;
-    } else if ((Address < ADDR_FLASH_SECTOR_6) && (Address >= ADDR_FLASH_SECTOR_5)) {
+    } else if ((address < ADDR_FLASH_SECTOR_6) && (address >= ADDR_FLASH_SECTOR_5)) {
         sector = FLASH_SECTOR_5;
-    } else if ((Address < ADDR_FLASH_SECTOR_7) && (Address >= ADDR_FLASH_SECTOR_6)) {
+    } else if ((address < ADDR_FLASH_SECTOR_7) && (address >= ADDR_FLASH_SECTOR_6)) {
         sector = FLASH_SECTOR_6;
     } else /* (Address < FLASH_END_ADDR) && (Address >= ADDR_FLASH_SECTOR_7) */
     {
@@ -28,6 +50,15 @@ static uint32_t GetSector(uint32_t Address)
     return sector;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Read data from FLASH. </summary>
+///
+/// <param name="buffer"> Pointer to buffer to read data into. </param>
+/// <param name="address"> Address to read from. </param>
+/// <param name="size"> Number of bytes to read. </param>
+///
+/// <returns> Number of bytes read.  </returns>
+//---------------------------------------------------------------------
 int FLASH_Read(uint32_t* buffer, uint32_t address, int size)
 {
 
@@ -40,6 +71,15 @@ int FLASH_Read(uint32_t* buffer, uint32_t address, int size)
     return size;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write data to FLASH. </summary>
+///
+/// <param name="data"> Pointer to buffer to write data from. </param>
+/// <param name="address"> Address to write data to. </param>
+/// <param name="size"> Number of bytes to write. </param>
+///
+/// <returns> Number of bytes written. </returns>
+//---------------------------------------------------------------------
 int FLASH_Write(uint32_t* data, uint32_t address, int size)
 {
     uint32_t FirstSector = 0, NbOfSectors = 0;
@@ -100,11 +140,21 @@ int FLASH_Write(uint32_t* data, uint32_t address, int size)
     return 0;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Read uC ID that was programmed by user. </summary>
+///
+/// <returns> ID of uC. </returns>
+//---------------------------------------------------------------------
 uint8_t FLASH_ReadID()
 {
     return *(uint8_t*)FLASH_USER_START_ADDR;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write uC ID to FLASH. </summary>
+///
+/// <param name="id"> User requested ID of uC. </param>
+//---------------------------------------------------------------------
 void FLASH_WriteID(uint8_t id)
 {
     uint32_t               SECTORError = 0;
@@ -122,11 +172,23 @@ void FLASH_WriteID(uint8_t id)
     HAL_FLASH_Lock();
 }
 
+//---------------------------------------------------------------------
+/// <summary> Read one byte from OTP (One Time Programmable memory). </summary>
+///
+/// <param name="address"> Address to read byte from. </param>
+///
+/// <returns> Value of the byte. </returns>
+//---------------------------------------------------------------------
 static uint8_t OTP_ReadByte(uint32_t address)
 {
     return *(uint8_t*)address;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Find first available memory address in OTP (One Time Programmable memory). </summary>
+///
+/// <returns> Availabe memory address. </returns>
+//---------------------------------------------------------------------
 static uint32_t OTP_GetEmptyByteAddress()
 {
     uint32_t address = ADDR_OTP_SECTOR;
@@ -140,6 +202,12 @@ static uint32_t OTP_GetEmptyByteAddress()
     return 0;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write one byte to OTP (One Time Programmable memory). </summary>
+///
+/// <param name="byte"> Byte to write. </param>
+/// <param name="address"> Address to write byte to. </param>
+//---------------------------------------------------------------------
 static void OTP_WriteByte(uint8_t byte, uint32_t address)
 {
     HAL_FLASH_Unlock();
@@ -148,6 +216,11 @@ static void OTP_WriteByte(uint8_t byte, uint32_t address)
     HAL_FLASH_Lock();
 }
 
+//---------------------------------------------------------------------
+/// <summary> Read uC ID from OTP (One Time Programmable memory). </summary>
+///
+/// <returns> uC ID. </returns>
+//---------------------------------------------------------------------
 uint8_t OTP_ReadID()
 {
     uint32_t address = OTP_GetEmptyByteAddress() - 1;
@@ -157,6 +230,11 @@ uint8_t OTP_ReadID()
         return 0;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Write uC ID to OTP (One Time Programmable memory). </summary>
+///
+/// <param name="id"> User requested ID of uC. </param>
+//---------------------------------------------------------------------
 void OTP_WriteID(uint8_t id)
 {
     uint32_t address = OTP_GetEmptyByteAddress();
