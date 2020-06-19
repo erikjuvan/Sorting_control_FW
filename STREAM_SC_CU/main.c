@@ -60,7 +60,7 @@
 #define SYNC_PIN GPIO_PIN_11
 #define SYNC_CLK __GPIOC_CLK_ENABLE
 
-// IO PIN (GPIO CURRENTLY NOT IN USE)
+// IO PIN (CURRENTLY NOT IN USE)
 #define IO_PORT GPIOC
 #define IO_PIN GPIO_PIN_12
 #define IO_CLK __GPIOC_CLK_ENABLE
@@ -95,10 +95,10 @@ typedef union {
 } ProtocolDataType;
 
 typedef enum {
-    OFF  = 0,
-    EVEN = 1,
-    ODD  = 2,
-    ALL  = 3
+    OFF = 0,
+    CH1 = 1,
+    CH2 = 2,
+    ALL = 3
 } ActiveLEDs;
 
 extern PCD_HandleTypeDef hpcd;
@@ -195,12 +195,8 @@ __attribute__((optimize("O1"))) void EXTI15_10_IRQHandler(void)
     /* EXTI line interrupt detected */
     if (__HAL_GPIO_EXTI_GET_IT(SYNC_PIN) != RESET) {
         __HAL_GPIO_EXTI_CLEAR_IT(SYNC_PIN);
-        uint32_t cnt = TIMx->CNT;
-        uint32_t arr = TIMx->ARR;
 
-        if (cnt > ((arr * 2) / 10) && cnt < ((arr * 8) / 10)) {
-            TIMx->EGR = TIM_EGR_UG; // Reset the counter and generate update event
-        }
+        TIMx->EGR = TIM_EGR_UG; // Reset the counter and generate update event
 
         if (sequence_idx != 0)
             GotoSequenceIndex(0);
@@ -682,21 +678,21 @@ static void SetIRLEDs(ActiveLEDs activate_led)
 {
     switch (activate_led) {
     case OFF:
+        GPIO_CLR_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
         GPIO_CLR_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
-        GPIO_CLR_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
         break;
-    case EVEN:
-        GPIO_CLR_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
-        GPIO_SET_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
-        break;
-    case ODD:
+    case CH1:
         GPIO_CLR_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
         GPIO_SET_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
+        break;
+    case CH2:
+        GPIO_CLR_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
+        GPIO_SET_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
         break;
     case ALL:
     default:
-        GPIO_SET_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
         GPIO_SET_BIT(IR_LED_CH1_PORT, IR_LED_CH1_PIN);
+        GPIO_SET_BIT(IR_LED_CH2_PORT, IR_LED_CH2_PIN);
         break;
     }
 }
