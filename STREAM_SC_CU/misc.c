@@ -1,6 +1,20 @@
-#include "stm32f7xx_hal.h"
+/// @file misc.c
+/// <summary>
+/// Miscellaneous helper functions.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
 
-int VCP_read(void* pBuffer, int size);
+#include "stm32f7xx_hal.h"
+#include "usbd_cdc_if.h"
 
 ////////////////////////////
 // Counting cycles using DWT

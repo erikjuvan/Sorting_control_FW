@@ -165,7 +165,7 @@
 #define __LFRACT_IBIT__ 0
 #endif
 #ifndef __GNUC_PATCHLEVEL__
-#define __GNUC_PATCHLEVEL__ 0
+#define __GNUC_PATCHLEVEL__ 1
 #endif
 #ifndef __FLT32_HAS_DENORM__
 #define __FLT32_HAS_DENORM__ 1
@@ -175,6 +175,9 @@
 #endif
 #ifndef __UINT_FAST8_MAX__
 #define __UINT_FAST8_MAX__ 0xffffffffU
+#endif
+#ifndef __cpp_rvalue_reference
+#define __cpp_rvalue_reference 200610
 #endif
 #ifndef __DEC64_MAX_EXP__
 #define __DEC64_MAX_EXP__ 385
@@ -338,6 +341,9 @@
 #ifndef __DEC32_MAX__
 #define __DEC32_MAX__ 9.999999E96DF
 #endif
+#ifndef __cpp_threadsafe_static_init
+#define __cpp_threadsafe_static_init 200806
+#endif
 #ifndef __DA_IBIT__
 #define __DA_IBIT__ 32
 #endif
@@ -402,7 +408,7 @@
 #define __UACCUM_EPSILON__ 0x1P-16UK
 #endif
 #ifndef __GNUC__
-#define __GNUC__ 7
+#define __GNUC__ 9
 #endif
 #ifndef __ULLACCUM_MAX__
 #define __ULLACCUM_MAX__ 0XFFFFFFFFFFFFFFFFP-32ULLK
@@ -421,6 +427,9 @@
 #endif
 #ifndef __BIGGEST_ALIGNMENT__
 #define __BIGGEST_ALIGNMENT__ 8
+#endif
+#ifndef USE_HAL_DRIVER
+#define USE_HAL_DRIVER 1
 #endif
 #ifndef __STDC_UTF_16__
 #define __STDC_UTF_16__ 1
@@ -452,8 +461,8 @@
 #ifndef __DBL_HAS_INFINITY__
 #define __DBL_HAS_INFINITY__ 1
 #endif
-#ifndef __INT64_MAX__
-#define __INT64_MAX__ 0x7fffffffffffffffLL
+#ifndef __HAVE_SPECULATION_SAFE_VALUE
+#define __HAVE_SPECULATION_SAFE_VALUE 1
 #endif
 #ifndef __ACCUM_IBIT__
 #define __ACCUM_IBIT__ 16
@@ -548,7 +557,7 @@
 #define __FLT32_HAS_QUIET_NAN__ 1
 #endif
 #ifndef __GNUG__
-#define __GNUG__ 7
+#define __GNUG__ 9
 #endif
 #ifndef __LONG_LONG_MAX__
 #define __LONG_LONG_MAX__ 0x7fffffffffffffffLL
@@ -558,9 +567,6 @@
 #endif
 #ifndef __ULACCUM_MAX__
 #define __ULACCUM_MAX__ 0XFFFFFFFFFFFFFFFFP-32ULK
-#endif
-#ifndef __cpp_rvalue_reference
-#define __cpp_rvalue_reference 200610
 #endif
 #ifndef __cpp_nsdmi
 #define __cpp_nsdmi 200809
@@ -587,7 +593,7 @@
 #define __cpp_hex_float 201603
 #endif
 #ifndef __GXX_ABI_VERSION
-#define __GXX_ABI_VERSION 1011
+#define __GXX_ABI_VERSION 1013
 #endif
 #ifndef __UTA_FBIT__
 #define __UTA_FBIT__ 64
@@ -649,9 +655,6 @@
 #ifndef __UINT16_MAX__
 #define __UINT16_MAX__ 0xffff
 #endif
-#ifndef __DBL_HAS_DENORM__
-#define __DBL_HAS_DENORM__ 1
-#endif
 #ifndef __ACCUM_MIN__
 #define __ACCUM_MIN__ (-0X1P15K - 0X1P15K)
 #endif
@@ -680,7 +683,7 @@
 #define __LDBL_DECIMAL_DIG__ 17
 #endif
 #ifndef __VERSION__
-#define __VERSION__ "7.2.0"
+#define __VERSION__ "9.2.1 20191025 (release) [ARM/arm-9-branch revision 277599]"
 #endif
 #ifndef __ULLFRACT_FBIT__
 #define __ULLFRACT_FBIT__ 64
@@ -751,6 +754,9 @@
 #ifndef __UINT_LEAST16_TYPE__
 #define __UINT_LEAST16_TYPE__ short unsigned int
 #endif
+#ifndef __DBL_HAS_DENORM__
+#define __DBL_HAS_DENORM__ 1
+#endif
 #ifndef __INT16_MAX__
 #define __INT16_MAX__ 0x7fff
 #endif
@@ -801,9 +807,6 @@
 #endif
 #ifndef __GCC_ATOMIC_WCHAR_T_LOCK_FREE
 #define __GCC_ATOMIC_WCHAR_T_LOCK_FREE 2
-#endif
-#ifndef __cpp_sized_deallocation
-#define __cpp_sized_deallocation 201309
 #endif
 #ifndef __VFP_FP__
 #define __VFP_FP__ 1
@@ -889,6 +892,9 @@
 #ifndef __DEC64_MANT_DIG__
 #define __DEC64_MANT_DIG__ 16
 #endif
+#ifndef __INT64_MAX__
+#define __INT64_MAX__ 0x7fffffffffffffffLL
+#endif
 #ifndef __UINT_LEAST32_MAX__
 #define __UINT_LEAST32_MAX__ 0xffffffffUL
 #endif
@@ -933,6 +939,9 @@
 #endif
 #ifndef __INTPTR_MAX__
 #define __INTPTR_MAX__ 0x7fffffff
+#endif
+#ifndef __cpp_sized_deallocation
+#define __cpp_sized_deallocation 201309
 #endif
 #ifndef __QQ_FBIT__
 #define __QQ_FBIT__ 7
@@ -1048,6 +1057,9 @@
 #ifndef __INT_LEAST64_MAX__
 #define __INT_LEAST64_MAX__ 0x7fffffffffffffffLL
 #endif
+#ifndef __FP_FAST_FMAF32
+#define __FP_FAST_FMAF32 1
+#endif
 #ifndef __DEC64_MIN__
 #define __DEC64_MIN__ 1E-383DD
 #endif
@@ -1131,6 +1143,9 @@
 #endif
 #ifndef __UHQ_IBIT__
 #define __UHQ_IBIT__ 0
+#endif
+#ifndef __ARM_FEATURE_COPROC
+#define __ARM_FEATURE_COPROC 15
 #endif
 #ifndef __LLACCUM_IBIT__
 #define __LLACCUM_IBIT__ 32
@@ -1387,21 +1402,23 @@
 //$(BSP_ROOT)/STM32F7xxxx/CMSIS_HAL/RTOS2/Include
 //$(BSP_ROOT)/STM32F7xxxx/STM32_USB_Device_Library/Core/Inc
 //$(BSP_ROOT)/STM32F7xxxx/STM32_USB_Device_Library/Class/CDC/Inc
-//$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0
-//$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\arm-eabi\thumb\fpu\cortex_m7
-//$(TOOLCHAIN_ROOT)\arm-eabi\include\c++\7.2.0\backward
-//$(TOOLCHAIN_ROOT)\lib\gcc\arm-eabi\7.2.0\include
-//$(TOOLCHAIN_ROOT)\lib\gcc\arm-eabi\7.2.0\include-fixed
-//$(TOOLCHAIN_ROOT)\arm-eabi\sys-include
-//$(TOOLCHAIN_ROOT)\arm-eabi\include
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\include\c++\9.2.1
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\include\c++\9.2.1\arm-none-eabi\thumb\v7e-m+fp\hard
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\include\c++\9.2.1\backward
+//$(TOOLCHAIN_ROOT)\lib\gcc\arm-none-eabi\9.2.1\include
+//$(TOOLCHAIN_ROOT)\lib\gcc\arm-none-eabi\9.2.1\include-fixed
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\include
+//$(ToolchainDir)\arm-none-eabi\include
 // --- Include directories end --- //
 
 // --- Library directories begin --- //
-//$(TOOLCHAIN_ROOT)\lib\gcc\arm-eabi\7.2.0\thumb\fpu\cortex_m7\
-//$(TOOLCHAIN_ROOT)\arm-eabi\lib\thumb\fpu\cortex_m7\
-//$(TOOLCHAIN_ROOT)\lib\gcc\arm-eabi\7.2.0\
+//$(TOOLCHAIN_ROOT)\lib\gcc\arm-none-eabi\9.2.1\thumb\v7e-m+fp\hard\
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\lib\thumb\v7e-m+fp\hard\
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\lib\thumb\v7e-m+fp\hard\
+//$(TOOLCHAIN_ROOT)\lib\gcc\arm-none-eabi\9.2.1\
 //$(TOOLCHAIN_ROOT)\lib\gcc\
-//$(TOOLCHAIN_ROOT)\arm-eabi\lib\
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\lib\
+//$(TOOLCHAIN_ROOT)\arm-none-eabi\lib\
 // --- Library directories begin --- //
 
 #pragma clang diagnostic pop

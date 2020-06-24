@@ -1,3 +1,18 @@
+/// @file parse.c
+/// <summary>
+/// Parsing library and commands implementation.
+/// </summary>
+///
+/// Supervision: /
+///
+/// Company: Sensum d.o.o.
+///
+/// @authors Erik Juvan
+///
+/// @version /
+/////-----------------------------------------------------------
+// Company: Sensum d.o.o.
+
 // C Standard Library
 #include <stdint.h>
 #include <stdio.h>
@@ -11,8 +26,6 @@
 #include "uart.h"
 
 extern Mode g_mode;
-
-extern Header header;
 
 extern int g_training;
 extern int g_verbose_level;
@@ -31,6 +44,12 @@ extern uint8_t UART_Address;
 
 const static char Delims[] = "\n\r\t, ";
 
+//---------------------------------------------------------------------
+/// <summary> Enter SORT mode. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_SORT(char* str, write_func Write)
 {
     // Echo
@@ -39,6 +58,12 @@ static void Function_SORT(char* str, write_func Write)
     g_mode = SORT;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Enter CONFIG mode. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_CONF(char* str, write_func Write)
 {
     // Echo
@@ -47,6 +72,12 @@ static void Function_CONF(char* str, write_func Write)
     g_mode = CONFIG;
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get version. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_VERG(char* str, write_func Write)
 {
     char buf[100] = {0};
@@ -54,6 +85,12 @@ static void Function_VERG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Set verbose level (0 - Off, !0 - On). </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_VRBS(char* str, write_func Write)
 {
     str             = strtok(NULL, Delims);
@@ -61,7 +98,7 @@ static void Function_VRBS(char* str, write_func Write)
 
     // Reset packet ID when entering verbose mode
     if (verbose_lvl != 0)
-        header.packet_id = 0;
+        ResetHeaderID();
 
     g_verbose_level = verbose_lvl;
 
@@ -71,6 +108,12 @@ static void Function_VRBS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get verbose level. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_VRBG(char* str, write_func Write)
 {
     char buf[10] = {0};
@@ -79,6 +122,12 @@ static void Function_VRBG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> uC UART ID SET. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_ID_S(char* str, write_func Write)
 {
     str = strtok(NULL, Delims);
@@ -95,6 +144,12 @@ static void Function_ID_S(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> uC UART ID GET. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_ID_G(char* str, write_func Write)
 {
     char buf[10] = {0};
@@ -102,6 +157,12 @@ static void Function_ID_G(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Reset uC. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_RSET(char* str, write_func Write)
 {
     // Echo
@@ -113,12 +174,23 @@ static void Function_RSET(char* str, write_func Write)
     NVIC_SystemReset();
 }
 
+//---------------------------------------------------------------------
+/// <summary> Train (currently not supported). </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_TRAN(char* str, write_func Write)
 {
     // Not currently supported
 }
 
-// "FRQS,1000" - 1000 Hz
+//---------------------------------------------------------------------
+/// <summary> Set frequency (example: "FRQS,1000" - 1000 Hz). </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_FRQS(char* str, write_func Write)
 {
     str         = strtok(NULL, Delims);
@@ -133,6 +205,12 @@ static void Function_FRQS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Set sorting parameters. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_SRTS(char* str, write_func Write)
 {
     str                    = strtok(NULL, Delims);
@@ -148,6 +226,12 @@ static void Function_SRTS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Set filter parameters. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_FILS(char* str, write_func Write)
 {
     str      = strtok(NULL, Delims);
@@ -163,6 +247,12 @@ static void Function_FILS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Set threshold value. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_THRS(char* str, write_func Write)
 {
     str         = strtok(NULL, Delims);
@@ -174,12 +264,24 @@ static void Function_THRS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Simple PING, to check if uC is alive. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_PING(char* str, write_func Write)
 {
     // Echo
     Write((uint8_t*)"PING", 4);
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get frequency. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_FRQG(char* str, write_func Write)
 {
     char buf[20] = {0};
@@ -189,6 +291,12 @@ static void Function_FRQG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get sorting parameters. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_SRTG(char* str, write_func Write)
 {
     char buf[50] = {0};
@@ -197,6 +305,12 @@ static void Function_SRTG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get filter parameters. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_FILG(char* str, write_func Write)
 {
     char buf[50] = {0};
@@ -205,6 +319,12 @@ static void Function_FILG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get threshold value. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_THRG(char* str, write_func Write)
 {
     char buf[20] = {0};
@@ -213,12 +333,63 @@ static void Function_THRG(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Get all settings. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_STTG(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
     snprintf(buf, sizeof(buf), "FREQ,%u\nSORTTICKS,%u,%u,%u\nFILTERCOEFF,%.3f,%.3f,%.3f\nTHRESHOLD,%.1f\n",
              GetSampleFrequency(), g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
 
+    Write((uint8_t*)buf, strlen(buf));
+}
+
+//---------------------------------------------------------------------
+/// <summary> Set IR LED sequence. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
+static void Function_SEQS(char* str, write_func Write)
+{
+    int seq[10];
+    int i = 0;
+    while ((str = strtok(NULL, Delims)) != NULL) {
+        seq[i++] = atoi(str);
+    }
+
+    SetSequence(seq, i);
+
+    // Echo
+    char buf[50];
+    char seq_buf[10];
+    snprintf(buf, sizeof(buf), "SEQS,%s", GetSequence(seq_buf, sizeof(seq_buf)));
+    Write((uint8_t*)buf, strlen(buf));
+}
+
+//---------------------------------------------------------------------
+/// <summary> Set sync (sync pin as input (slave) or output (master)). </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
+static void Function_SYNS(char* str, write_func Write)
+{
+    str              = strtok(NULL, Delims);
+    int sync_enabled = atoi(str);
+
+    if (sync_enabled)
+        SetSyncPinAsOutput();
+    else
+        SetSyncPinAsInput();
+
+    // Echo
+    char buf[20];
+    snprintf(buf, sizeof(buf), "SYNS,%d", sync_enabled);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -252,8 +423,18 @@ static struct {
     COMMAND(SRTS), // SET SORTING TICKS
     COMMAND(FILS), // SET FILTER COEFFICIENTS
     COMMAND(THRS), // SET THREASHOLD
+
+    // Not yet tested
+    COMMAND(SEQS), // Sequence set, seq1, seq2, ... (e.g. SEQS,EVEN,ODD). For now the default are 2 sequences.
+    COMMAND(SYNS), // Sync Ouptut set, on/off (1/0)
 };
 
+//---------------------------------------------------------------------
+/// <summary> Parse commands. </summary>
+///
+/// <param name="string"> Raw command text. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 void Parse(char* string, write_func Write)
 {
     char* str;

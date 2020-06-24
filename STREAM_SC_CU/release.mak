@@ -6,7 +6,7 @@ BINARYDIR := Release
 
 #Additional flags
 PREPROCESSOR_MACROS := NDEBUG=1 RELEASE=1
-INCLUDE_DIRS := 
+INCLUDE_DIRS := $(ToolchainDir)\arm-none-eabi\include
 LIBRARY_DIRS := 
 LIBRARY_NAMES := 
 ADDITIONAL_LINKER_INPUTS := 

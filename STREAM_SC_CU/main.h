@@ -1,8 +1,8 @@
 #pragma once
 
-#define SWVER "RK_SC_FWMAIN V1.0.0"
-#define HWVER "RK_SC_SCCUPCB V1.0.0"
-#define COMPATIBILITYMODE "CM00"
+#define SWVER "SC_CU_FW V1.3.0.1"
+#define HWVER "N/A"
+#define COMPATIBILITYMODE "N/A"
 
 #define N_CHANNELS 8
 
@@ -16,3 +16,8 @@ typedef struct {
 
 void     SetSampleFrequency(int freq_hz);
 uint32_t GetSampleFrequency();
+void     SetSequence(int* seq, int num_of_elements);
+char*    GetSequence(char* buf, int sizeof_buf);
+void     SetSyncPinAsOutput();
+void     SetSyncPinAsInput();
+void     ResetHeaderID();
