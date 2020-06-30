@@ -138,14 +138,13 @@ uint8_t g_writeToPC = 0;
 uint16_t g_ejection_window  = 0;
 uint16_t g_detected_objects = 0;
 
-int   g_system_trained = 0;
-int   g_training       = 0;
 float g_trained_coeffs[N_CHANNELS];
 
 static void Filter(uint32_t* x);
 static void SetIRLEDs(ActiveLEDs activate_led);
 static void GotoSequenceIndex(unsigned int si);
 static void NextInSequence();
+static void ADC_Configure();
 
 static ADC_HandleTypeDef ADC1_Handle;
 static DMA_HandleTypeDef DMA2_Handle;
@@ -244,11 +243,11 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
     if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
         DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
         for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
-            buf[i] = buffer[0][i];
+            buf[i] = buffer[0][i] * g_trained_coeffs[i];
     } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
         DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
         for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
-            buf[i] = buffer[1][i];
+            buf[i] = buffer[1][i] * g_trained_coeffs[i];
     }
 
     if (sequence_idx == (sequence_N - 1)) // last sequence
@@ -371,6 +370,70 @@ uint32_t GetSampleFrequency()
 void ResetHeaderID()
 {
     header.packet_id = 0;
+}
+
+//---------------------------------------------------------------------
+/// <summary> Normalize channels. </summary>
+//---------------------------------------------------------------------
+void Train()
+{
+    uint32_t adc_channels[] = {ADC_CHANNEL_9, ADC_CHANNEL_8, ADC_CHANNEL_15, ADC_CHANNEL_14, ADC_CHANNEL_7, ADC_CHANNEL_6, ADC_CHANNEL_5, ADC_CHANNEL_4};
+
+    HAL_ADC_Stop_DMA(&ADC1_Handle);
+
+    ADC1_Handle.Init.ScanConvMode          = DISABLE;
+    ADC1_Handle.Init.NbrOfConversion       = 1;
+    ADC1_Handle.Init.DMAContinuousRequests = DISABLE;
+    ADC1_Handle.Init.EOCSelection          = DISABLE;
+    HAL_ADC_Init(&ADC1_Handle);
+
+    ADC_ChannelConfTypeDef adcChannelConfig;
+
+    adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES; // ADC_SAMPLETIME_84CYCLES
+    adcChannelConfig.Rank         = 1;
+
+    float avg[N_CHANNELS] = {0.f};
+
+    for (int ch = 0; ch < N_CHANNELS; ++ch) {
+        adcChannelConfig.Channel = adc_channels[ch];
+        if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
+        }
+
+        uint32_t  accum = 0;
+        const int Size  = 1000;
+
+        for (int i = 0; i < Size; ++i) {
+            HAL_ADC_Start(&ADC1_Handle);
+            if (HAL_ADC_PollForConversion(&ADC1_Handle, 500) == HAL_OK)
+                accum += HAL_ADC_GetValue(&ADC1_Handle);
+        }
+
+        HAL_ADC_Stop(&ADC1_Handle);
+        avg[ch] = accum / Size;
+    }
+
+    float avg_all = 0.f;
+
+    for (int i = 0; i < N_CHANNELS; ++i)
+        avg_all += avg[i];
+
+    avg_all /= N_CHANNELS;
+
+    for (int i = 0; i < N_CHANNELS; ++i)
+        g_trained_coeffs[i] = avg_all / avg[i]; // TODO: Maybe divide median not mean?
+
+    HAL_ADC_Stop(&ADC1_Handle);
+    ADC_Configure();
+    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
+}
+
+//---------------------------------------------------------------------
+/// <summary> Return channel values back to raw (unnormalize). </summary>
+//---------------------------------------------------------------------
+void Untrain()
+{
+    for (int i = 0; i < N_CHANNELS; ++i)
+        g_trained_coeffs[i] = 1.0f;
 }
 
 //---------------------------------------------------------------------
@@ -718,53 +781,6 @@ static void GotoSequenceIndex(unsigned int si)
 static void NextInSequence()
 {
     GotoSequenceIndex(sequence_idx + 1);
-}
-
-//---------------------------------------------------------------------
-/// <summary> Normalize channels. </summary>
-//---------------------------------------------------------------------
-static void Train()
-{
-    uint32_t adc_channels[] = {ADC_CHANNEL_9, ADC_CHANNEL_8, ADC_CHANNEL_15, ADC_CHANNEL_14, ADC_CHANNEL_7, ADC_CHANNEL_6, ADC_CHANNEL_5, ADC_CHANNEL_4};
-
-    HAL_ADC_Stop_DMA(&ADC1_Handle);
-
-    ADC1_Handle.Init.ScanConvMode          = DISABLE;
-    ADC1_Handle.Init.NbrOfConversion       = 1;
-    ADC1_Handle.Init.DMAContinuousRequests = DISABLE;
-    ADC1_Handle.Init.EOCSelection          = DISABLE;
-    HAL_ADC_Init(&ADC1_Handle);
-
-    ADC_ChannelConfTypeDef adcChannelConfig;
-
-    adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES; // ADC_SAMPLETIME_84CYCLES
-    adcChannelConfig.Rank         = 1;
-
-    for (int adc_idx = 0; adc_idx < N_CHANNELS; ++adc_idx) {
-
-        adcChannelConfig.Channel = adc_channels[adc_idx];
-        if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-        }
-
-        uint32_t  accum = 0;
-        const int Size  = 1000;
-
-        for (int i = 0; i < Size; ++i) {
-            HAL_ADC_Start(&ADC1_Handle);
-            if (HAL_ADC_PollForConversion(&ADC1_Handle, 500) == HAL_OK)
-                accum += HAL_ADC_GetValue(&ADC1_Handle);
-        }
-
-        HAL_ADC_Stop(&ADC1_Handle);
-        float avg                 = accum / Size;
-        g_trained_coeffs[adc_idx] = 1000.0 / avg;
-    }
-
-    HAL_ADC_Stop(&ADC1_Handle);
-    ADC_Configure();
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
-
-    g_system_trained = 1;
 }
 
 //---------------------------------------------------------------------

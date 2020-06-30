@@ -27,7 +27,6 @@
 
 extern Mode g_mode;
 
-extern int g_training;
 extern int g_verbose_level;
 
 extern uint32_t g_delay_ticks_param;
@@ -175,14 +174,31 @@ static void Function_RSET(char* str, write_func Write)
 }
 
 //---------------------------------------------------------------------
-/// <summary> Train (currently not supported). </summary>
+/// <summary> Train. </summary>
 ///
 /// <param name="str"> Raw text with optional function arguments. </param>
 /// <param name="Write"> Function pointer to a write function (UART, USB). </param>
 //---------------------------------------------------------------------
 static void Function_TRAN(char* str, write_func Write)
 {
-    // Not currently supported
+    Train();
+
+    // Echo
+    Write((uint8_t*)"TRAN", 4);
+}
+
+//---------------------------------------------------------------------
+/// <summary> Untrain. </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
+static void Function_UTRN(char* str, write_func Write)
+{
+    Untrain();
+
+    // Echo
+    Write((uint8_t*)"UTRN", 4);
 }
 
 //---------------------------------------------------------------------
@@ -412,6 +428,7 @@ static struct {
     COMMAND(PING), // PING (echo)
     COMMAND(RSET), // RESET
     COMMAND(TRAN), // TRAIN
+    COMMAND(UTRN), // UNTRAIN
 
     COMMAND(FRQG), // GET FREQUENCY
     COMMAND(SRTG), // GET SORTING TICKS
