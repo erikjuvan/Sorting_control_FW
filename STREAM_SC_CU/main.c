@@ -257,7 +257,7 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
     } else if (sequence[sequence_idx] == CH2) {
         for (int i = 1; i < N_CHANNELS; i += sequence_N)
             buf[i] = pBuffer[i];
-    } else if (sequence[sequence_idx] == ALL) {
+    } else { // ALL or OFF
         for (int i = 0; i < N_CHANNELS; ++i)
             buf[i] = pBuffer[i];
     }
