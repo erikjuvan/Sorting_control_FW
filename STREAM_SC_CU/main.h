@@ -21,3 +21,5 @@ char*    GetSequence(char* buf, int sizeof_buf);
 void     SetSyncPinAsOutput();
 void     SetSyncPinAsInput();
 void     ResetHeaderID();
+void     Train();
+void     Untrain();

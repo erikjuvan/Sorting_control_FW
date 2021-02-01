@@ -138,14 +138,15 @@ uint8_t g_writeToPC = 0;
 uint16_t g_ejection_window  = 0;
 uint16_t g_detected_objects = 0;
 
-int   g_system_trained = 0;
-int   g_training       = 0;
-float g_trained_coeffs[N_CHANNELS];
+uint8_t g_training = 0; // flag that signals the system is in training mode
+float   g_trained_coeffs[N_CHANNELS];
 
 static void Filter(uint32_t* x);
 static void SetIRLEDs(ActiveLEDs activate_led);
 static void GotoSequenceIndex(unsigned int si);
 static void NextInSequence();
+static void ADC_Configure();
+static void TrainCoefficients(uint32_t* buf);
 
 static ADC_HandleTypeDef ADC1_Handle;
 static DMA_HandleTypeDef DMA2_Handle;
@@ -164,9 +165,9 @@ static const uint32_t TIM_COUNT_FREQ = 1000000; // f=1MHz, T=1us
 
 // IR LEDs
 /////////////////////////////////////
-static ActiveLEDs         sequence[]   = {ALL, ALL}; // TODO: What should be the default sequence, OFF or ALL?
-static unsigned int       sequence_idx = 0;
-static const unsigned int sequence_N   = sizeof(sequence) / sizeof(sequence[0]);
+static ActiveLEDs   sequence[2]  = {OFF}; // no valid sequence by default (size is 2 since current support is for 2 channels only, so more doesnt make sense)
+static unsigned int sequence_idx = 0;
+unsigned int        sequence_N   = 0;
 
 static int sync_output_enabled = 0;
 /////////////////////////////////////
@@ -240,19 +241,37 @@ __attribute__((optimize("O1"))) void TIMx_UP_IRQ_Handler()
 __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 {
     static uint32_t buf[N_CHANNELS] = {0};
+    uint32_t*       pBuffer;
 
     if (DMA2->LISR & DMA_LISR_HTIF0) {  // If half-transfer complete
         DMA2->LIFCR = DMA_LIFCR_CHTIF0; // clear half transfer complete interrupt flag
-        for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
-            buf[i] = buffer[0][i];
+        pBuffer     = buffer[0];
     } else if (DMA2->LISR & DMA_LISR_TCIF0) { // If transfer complete
         DMA2->LIFCR = DMA_LIFCR_CTCIF0;       // clear half transfer complete interrupt flag
-        for (int i = sequence_idx; i < N_CHANNELS; i += sequence_N)
-            buf[i] = buffer[1][i];
+        pBuffer     = buffer[1];
     }
 
-    if (sequence_idx == (sequence_N - 1)) // last sequence
+    if (sequence[sequence_idx] == CH1) {
+        for (int i = 0; i < N_CHANNELS; i += sequence_N)
+            buf[i] = pBuffer[i];
+    } else if (sequence[sequence_idx] == CH2) {
+        for (int i = 1; i < N_CHANNELS; i += sequence_N)
+            buf[i] = pBuffer[i];
+    } else { // ALL or OFF
+        for (int i = 0; i < N_CHANNELS; ++i)
+            buf[i] = pBuffer[i];
+    }
+
+    if (sequence_idx == (sequence_N - 1)) { // last sequence
+
+        if (g_training)
+            TrainCoefficients(buf);
+
+        for (int i = 0; i < N_CHANNELS; ++i)
+            buf[i] *= g_trained_coeffs[i];
+
         Filter(buf);
+    }
 
     for (int i = 0; i < N_CHANNELS; ++i) {
         if (g_delay_ticker[i] >= 0) {
@@ -278,11 +297,18 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
 //---------------------------------------------------------------------
 void SetSequence(int* seq, int num_of_elements)
 {
-    int size = num_of_elements > sequence_N ? sequence_N : num_of_elements;
+    const int max_sequence_size = sizeof(sequence) / sizeof(sequence[0]);
 
-    for (int i = 0; i < size; ++i) {
+    if (num_of_elements > max_sequence_size) // too many steps in the sequence
+        return;
+
+    sequence_N = num_of_elements;
+
+    for (int i = 0; i < num_of_elements; ++i) {
         sequence[i] = seq[i];
     }
+
+    sequence_idx = 0;
 }
 
 //---------------------------------------------------------------------
@@ -295,7 +321,15 @@ void SetSequence(int* seq, int num_of_elements)
 //---------------------------------------------------------------------
 char* GetSequence(char* buf, int sizeof_buf)
 {
-    snprintf(buf, sizeof_buf, "%d,%d", sequence[0], sequence[1]);
+    if (sequence_N <= 0)
+        return NULL;
+
+    buf[0] = 0;
+
+    for (int i = 0; i < sequence_N; ++i)
+        snprintf(&buf[strlen(buf)], sizeof_buf - strlen(buf), "%d,", sequence[i]);
+
+    buf[strlen(buf) - 1] = 0; // remove dangling comma
 
     return buf;
 }
@@ -371,6 +405,25 @@ uint32_t GetSampleFrequency()
 void ResetHeaderID()
 {
     header.packet_id = 0;
+}
+
+//---------------------------------------------------------------------
+/// <summary> Normalize channels. </summary>
+//---------------------------------------------------------------------
+void Train()
+{
+    g_training = 1;
+}
+
+//---------------------------------------------------------------------
+/// <summary> Return channel values back to raw (unnormalize). </summary>
+//---------------------------------------------------------------------
+void Untrain()
+{
+    g_training = 0;
+
+    for (int i = 0; i < N_CHANNELS; ++i)
+        g_trained_coeffs[i] = 1.0f;
 }
 
 //---------------------------------------------------------------------
@@ -658,8 +711,7 @@ static void Init()
 #endif
 
     // Set all coeffs to 1.0 (untrained)
-    for (int i = 0; i < N_CHANNELS; ++i)
-        g_trained_coeffs[i] = 1.0;
+    Untrain();
 
     // reset counter just to be sure it's 0 at start
     header.packet_id = 0;
@@ -667,6 +719,46 @@ static void Init()
     HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
 
     USB_Init();
+}
+
+//---------------------------------------------------------------------
+/// <summary> Normalize (train) coefficients. </summary>
+///
+/// <param name="buf"> Buffer holding ADC channel values. </param>
+//---------------------------------------------------------------------
+static void TrainCoefficients(uint32_t* buf)
+{
+    const int  Size              = 1000;
+    static int cnt               = Size;
+    static int accum[N_CHANNELS] = {0};
+
+    for (int i = 0; i < N_CHANNELS; ++i)
+        accum[i] += buf[i];
+
+    if (--cnt <= 0) {
+        float avg[N_CHANNELS];
+
+        for (int i = 0; i < N_CHANNELS; ++i)
+            avg[i] = (float)accum[i] / Size; // round instead of floor
+
+        float total_mean = 0.f;
+
+        for (int i = 0; i < N_CHANNELS; ++i)
+            total_mean += avg[i];
+
+        total_mean /= N_CHANNELS;
+
+        for (int i = 0; i < N_CHANNELS; ++i)
+            g_trained_coeffs[i] = total_mean / avg[i];
+
+        // Reset local static variables
+        cnt = Size;
+        for (int i = 0; i < N_CHANNELS; ++i)
+            accum[i] = 0;
+
+        // Training over
+        g_training = 0;
+    }
 }
 
 //---------------------------------------------------------------------
@@ -704,6 +796,10 @@ static void SetIRLEDs(ActiveLEDs activate_led)
 //---------------------------------------------------------------------
 static void GotoSequenceIndex(unsigned int si)
 {
+    // If no valid sequence just return
+    if (sequence_N <= 0)
+        return;
+
     if (si < sequence_N)
         sequence_idx = si;
     else
@@ -718,53 +814,6 @@ static void GotoSequenceIndex(unsigned int si)
 static void NextInSequence()
 {
     GotoSequenceIndex(sequence_idx + 1);
-}
-
-//---------------------------------------------------------------------
-/// <summary> Normalize channels. </summary>
-//---------------------------------------------------------------------
-static void Train()
-{
-    uint32_t adc_channels[] = {ADC_CHANNEL_9, ADC_CHANNEL_8, ADC_CHANNEL_15, ADC_CHANNEL_14, ADC_CHANNEL_7, ADC_CHANNEL_6, ADC_CHANNEL_5, ADC_CHANNEL_4};
-
-    HAL_ADC_Stop_DMA(&ADC1_Handle);
-
-    ADC1_Handle.Init.ScanConvMode          = DISABLE;
-    ADC1_Handle.Init.NbrOfConversion       = 1;
-    ADC1_Handle.Init.DMAContinuousRequests = DISABLE;
-    ADC1_Handle.Init.EOCSelection          = DISABLE;
-    HAL_ADC_Init(&ADC1_Handle);
-
-    ADC_ChannelConfTypeDef adcChannelConfig;
-
-    adcChannelConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES; // ADC_SAMPLETIME_84CYCLES
-    adcChannelConfig.Rank         = 1;
-
-    for (int adc_idx = 0; adc_idx < N_CHANNELS; ++adc_idx) {
-
-        adcChannelConfig.Channel = adc_channels[adc_idx];
-        if (HAL_ADC_ConfigChannel(&ADC1_Handle, &adcChannelConfig) != HAL_OK) {
-        }
-
-        uint32_t  accum = 0;
-        const int Size  = 1000;
-
-        for (int i = 0; i < Size; ++i) {
-            HAL_ADC_Start(&ADC1_Handle);
-            if (HAL_ADC_PollForConversion(&ADC1_Handle, 500) == HAL_OK)
-                accum += HAL_ADC_GetValue(&ADC1_Handle);
-        }
-
-        HAL_ADC_Stop(&ADC1_Handle);
-        float avg                 = accum / Size;
-        g_trained_coeffs[adc_idx] = 1000.0 / avg;
-    }
-
-    HAL_ADC_Stop(&ADC1_Handle);
-    ADC_Configure();
-    HAL_ADC_Start_DMA(&ADC1_Handle, (uint32_t*)(&buffer[0][0]), sizeof(buffer) / sizeof(buffer[0][0]));
-
-    g_system_trained = 1;
 }
 
 //---------------------------------------------------------------------
