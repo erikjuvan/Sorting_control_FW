@@ -24,6 +24,6 @@ CFLAGS +=
 CXXFLAGS += 
 ASFLAGS += 
 LDFLAGS += --specs=nano.specs -u _printf_float --specs=nosys.specs
-COMMONFLAGS += -mcpu=cortex-m7 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard
+COMMONFLAGS += -mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16
 LINKER_SCRIPT := $(BSP_ROOT)/STM32F7xxxx/LinkerScripts/STM32F745VE_flash.lds
 
