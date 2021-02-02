@@ -41,7 +41,11 @@ extern float g_threshold;
 
 extern uint8_t UART_Address;
 
+extern unsigned int sequence_N;
+
 const static char Delims[] = "\n\r\t, ";
+
+static int requested_sampling_freq_hz;
 
 //---------------------------------------------------------------------
 /// <summary> Enter SORT mode. </summary>
@@ -212,12 +216,14 @@ static void Function_FRQS(char* str, write_func Write)
     str         = strtok(NULL, Delims);
     int freq_hz = atoi((char*)str);
     if (freq_hz > 0) { // WARNING: Currently we are using TIM1 which has 16bit ARR, so with our 1us resolution the minimum frequency we can get is approx. 15 Hz.
-        SetSampleFrequency(freq_hz);
+        requested_sampling_freq_hz = freq_hz;
+        if (sequence_N > 0)
+            SetSampleFrequency(requested_sampling_freq_hz * sequence_N);
     }
 
     // Echo
     char buf[20];
-    snprintf(buf, sizeof(buf), "FRQS,%u", GetSampleFrequency());
+    snprintf(buf, sizeof(buf), "FRQS,%u", requested_sampling_freq_hz);
     Write((uint8_t*)buf, strlen(buf));
 }
 
@@ -302,7 +308,7 @@ static void Function_FRQG(char* str, write_func Write)
 {
     char buf[20] = {0};
 
-    snprintf(buf, sizeof(buf), "FRQG,%u", GetSampleFrequency());
+    snprintf(buf, sizeof(buf), "FRQG,%u", requested_sampling_freq_hz);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -359,7 +365,7 @@ static void Function_STTG(char* str, write_func Write)
 {
     char buf[300]; // don't need to zero it out
     snprintf(buf, sizeof(buf), "FREQ,%u\nSORTTICKS,%u,%u,%u\nFILTERCOEFF,%.3f,%.3f,%.3f\nTHRESHOLD,%.1f\n",
-             GetSampleFrequency(), g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
+             requested_sampling_freq_hz, g_delay_ticks_param, g_duration_ticks_param, g_blind_ticks_param, g_lpf1_K, g_hpf_K, g_lpf2_K, g_threshold);
 
     Write((uint8_t*)buf, strlen(buf));
 }
@@ -379,6 +385,7 @@ static void Function_SEQS(char* str, write_func Write)
     }
 
     SetSequence(seq, i);
+    SetSampleFrequency(requested_sampling_freq_hz * sequence_N);
 
     // Echo
     char buf[50];
