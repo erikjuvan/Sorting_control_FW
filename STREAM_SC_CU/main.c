@@ -271,19 +271,19 @@ __attribute__((optimize("O1"))) void DMA2_Stream0_IRQHandler()
             buf[i] *= g_trained_coeffs[i];
 
         Filter(buf);
-    }
 
-    for (int i = 0; i < N_CHANNELS; ++i) {
-        if (g_delay_ticker[i] >= 0) {
-            if (g_delay_ticker[i]-- == 0) {
-                VALVE_PORT->BSRR     = g_Valve_Pins[i];
-                g_duration_ticker[i] = g_duration_ticks_param;
+        for (int i = 0; i < N_CHANNELS; ++i) {
+            if (g_delay_ticker[i] >= 0) {
+                if (g_delay_ticker[i]-- == 0) {
+                    VALVE_PORT->BSRR     = g_Valve_Pins[i];
+                    g_duration_ticker[i] = g_duration_ticks_param;
+                }
             }
-        }
 
-        if (g_duration_ticker[i] >= 0) {
-            if (g_duration_ticker[i]-- == 0) {
-                VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+            if (g_duration_ticker[i] >= 0) {
+                if (g_duration_ticker[i]-- == 0) {
+                    VALVE_PORT->BSRR = g_Valve_Pins[i] << 16;
+                }
             }
         }
     }
