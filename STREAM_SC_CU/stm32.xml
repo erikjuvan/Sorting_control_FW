@@ -5,7 +5,7 @@
     <Revision>0</Revision>
   </ToolchainVersion>
   <BspID>com.sysprogs.arm.stm32</BspID>
-  <BspVersion>2020.01</BspVersion>
+  <BspVersion>2020.10</BspVersion>
   <McuID>STM32F745VE</McuID>
   <MCUDefinitionFile>STM32F7xxxx/DeviceDefinitions/stm32f745xx.xml</MCUDefinitionFile>
   <MCUProperties>
