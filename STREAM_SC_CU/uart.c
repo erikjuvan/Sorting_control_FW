@@ -59,6 +59,11 @@ void USARTx_IRQHandler()
             uart_tx_buffer.size = 0;
         }
     }
+
+    // if overrun occured
+    if ((isrflags & USART_ISR_ORE) && (cr1its & USART_CR1_RXNEIE)) {
+        USARTx->ICR = USART_ICR_ORECF; // clear ORE flag
+    }
 }
 
 //---------------------------------------------------------------------
