@@ -416,6 +416,21 @@ static void Function_SYNS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+static void Function_VALV(char* str, write_func Write)
+{
+    str                      = strtok(NULL, Delims);
+    unsigned int valve_idx   = atoi(str);
+    str                      = strtok(NULL, Delims);
+    unsigned int valve_state = atoi(str);
+
+    SetValve(valve_idx, valve_state);
+
+    // Echo
+    char buf[20];
+    snprintf(buf, sizeof(buf), "VALV,%u,%u", valve_idx, valve_state);
+    Write((uint8_t*)buf, strlen(buf));
+}
+
 #define COMMAND(NAME)          \
     {                          \
 #NAME, Function_##NAME \
@@ -448,9 +463,10 @@ static struct {
     COMMAND(FILS), // SET FILTER COEFFICIENTS
     COMMAND(THRS), // SET THREASHOLD
 
-    // Not yet tested
     COMMAND(SEQS), // Sequence set, seq1, seq2, ... (e.g. SEQS,EVEN,ODD). For now the default are 2 sequences.
     COMMAND(SYNS), // Sync Ouptut set, on/off (1/0)
+
+    COMMAND(VALV), // Valve control
 };
 
 //---------------------------------------------------------------------

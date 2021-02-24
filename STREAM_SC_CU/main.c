@@ -389,6 +389,23 @@ void SetSampleFrequency(int freq_hz)
 }
 
 //---------------------------------------------------------------------
+/// <summary> Set sample frequency. </summary>
+///
+/// <param name="valve_idx"> Valve index from 0 to 7  </param>
+/// <param name="state"> Set state, 0 - off, 1 - on </param>
+//---------------------------------------------------------------------
+void SetValve(unsigned int valve_idx, unsigned int state)
+{
+    if (valve_idx > 7)
+        return;
+
+    if (state) // open valve
+        VALVE_PORT->BSRR = g_Valve_Pins[valve_idx];
+    else
+        VALVE_PORT->BSRR = g_Valve_Pins[valve_idx] << 16;
+}
+
+//---------------------------------------------------------------------
 /// <summary> Get sample frequency. </summary>
 ///
 /// <returns> Sample frequency in Hz. </returns>

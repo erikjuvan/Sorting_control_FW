@@ -23,3 +23,4 @@ void     SetSyncPinAsInput();
 void     ResetHeaderID();
 void     Train();
 void     Untrain();
+void     SetValve(unsigned int valve_idx, unsigned int state);
