@@ -416,7 +416,13 @@ static void Function_SYNS(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
-static void Function_VALV(char* str, write_func Write)
+//---------------------------------------------------------------------
+/// <summary> Valve set (e.g. VLVS,0,1 - valve 0 to ON) </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
+static void Function_VLVS(char* str, write_func Write)
 {
     str                      = strtok(NULL, Delims);
     unsigned int valve_idx   = atoi(str);
@@ -427,10 +433,16 @@ static void Function_VALV(char* str, write_func Write)
 
     // Echo
     char buf[20];
-    snprintf(buf, sizeof(buf), "VALV,%u,%u", valve_idx, valve_state);
+    snprintf(buf, sizeof(buf), "VLVS,%u,%u", valve_idx, valve_state);
     Write((uint8_t*)buf, strlen(buf));
 }
 
+//---------------------------------------------------------------------
+/// <summary> Filter type - sets filter type  (e.g. FLTT,4) </summary>
+///
+/// <param name="str"> Raw text with optional function arguments. </param>
+/// <param name="Write"> Function pointer to a write function (UART, USB). </param>
+//---------------------------------------------------------------------
 static void Function_FLTT(char* str, write_func Write)
 {
     str            = strtok(NULL, Delims);
@@ -483,7 +495,7 @@ static struct {
     COMMAND(SEQS), // Sequence set, seq1, seq2, ... (e.g. SEQS,EVEN,ODD). For now the default are 2 sequences.
     COMMAND(SYNS), // Sync Ouptut set, on/off (1/0)
 
-    COMMAND(VALV), // Valve control
+    COMMAND(VLVS), // Valve set
     COMMAND(FLTT), // Choose filter type
 };
 
