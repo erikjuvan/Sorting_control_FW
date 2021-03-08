@@ -141,7 +141,13 @@ uint16_t g_detected_objects = 0;
 uint8_t g_training = 0; // flag that signals the system is in training mode
 float   g_trained_coeffs[N_CHANNELS];
 
-static void Filter(uint32_t* x);
+static void Filter1(uint32_t* raw_data);
+static void Filter2(uint32_t* raw_data);
+static void Filter3(uint32_t* raw_data);
+static void Filter4(uint32_t* raw_data);
+
+static void (*Filter)(uint32_t* raw_data) = Filter1;
+
 static void SetIRLEDs(ActiveLEDs activate_led);
 static void GotoSequenceIndex(unsigned int si);
 static void NextInSequence();
@@ -882,12 +888,28 @@ static __attribute__((optimize("O2"))) void ObjectDetected(int ch)
     g_detected_objects |= 1 << ch;
 }
 
+int ChooseFilterType(int filter_number)
+{
+    if (filter_number == 1)
+        Filter = Filter1;
+    else if (filter_number == 2)
+        Filter = Filter2;
+    else if (filter_number == 3)
+        Filter = Filter3;
+    else if (filter_number == 4)
+        Filter = Filter4;
+    else
+        return -1;
+
+    return 0;
+}
+
 //---------------------------------------------------------------------
 /// <summary> Filter raw ADC channel data which is then used for object detection. </summary>
-///
+/// <type> Filter1 - original filter with blind time </type>
 /// <param name="raw_data"> Pointer to raw ADC data for all channels. </param>
 //---------------------------------------------------------------------
-static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
+static __attribute__((optimize("O2"))) void Filter1(uint32_t* raw_data)
 {
     static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
     static int   blind_ticker[N_CHANNELS] = {0};
@@ -912,9 +934,120 @@ static __attribute__((optimize("O2"))) void Filter(uint32_t* raw_data)
 
         blind_ticker[i] -= (blind_ticker[i] > 0);
 
-        if (y4[i] > g_threshold && blind_ticker[i] <= 0) {
+        if (y4[i] >= g_threshold && blind_ticker[i] <= 0) {
             blind_ticker[i] = g_blind_ticks_param;
             ObjectDetected(i);
+        }
+    }
+
+    if (g_verbose_level)
+        AddValues(raw_data, y4);
+}
+
+//---------------------------------------------------------------------
+/// <summary> Filter raw ADC channel data which is then used for object detection. </summary>
+/// <type> Filter2 - modified filter with blind time that cuts off the second part of signal thereby shortening it.</type>
+/// <param name="raw_data"> Pointer to raw ADC data for all channels. </param>
+//---------------------------------------------------------------------
+static __attribute__((optimize("O2"))) void Filter2(uint32_t* raw_data)
+{
+    static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
+    static int   blind_ticker[N_CHANNELS] = {0};
+
+    for (int i = 0; i < N_CHANNELS; i++) {
+        y0[i] = (float)raw_data[i];
+        // LPF
+        y1[i] = g_lpf1_K * y0[i] + ((float)1.0 - g_lpf1_K) * y1[i];
+        // HPF
+        y2[i] = g_hpf_K * y1[i] + ((float)1.0 - g_hpf_K) * y2[i];
+        y3[i] = y2[i] - y1[i];
+        // LPF
+        y4[i] = g_lpf2_K * y3[i] + ((float)1.0 - g_lpf2_K) * y4[i];
+
+        // Overriding values can be dangerous if shape of signal makes it such that signal rises at the begining instead of falls
+        if (y4[i] < 0)
+            y4[i] = 0; // avoid negative numbers (not to clash with object detection encoding)
+        // Square it to increase max/min ratio (increase dynamic resolution)
+        // y4[i] = y4[i] * y4[i]; // not used at the moment
+
+        blind_ticker[i] -= (blind_ticker[i] > 0);
+
+        if (y4[i] >= g_threshold && blind_ticker[i] <= 0) {
+            blind_ticker[i] = g_blind_ticks_param;
+            ObjectDetected(i);
+        }
+    }
+
+    if (g_verbose_level)
+        AddValues(raw_data, y4);
+}
+
+//---------------------------------------------------------------------
+/// <summary> Filter raw ADC channel data which is then used for object detection. </summary>
+/// <type> Filter3 - original filter without blind time but instead with positive edge detection when crossing threshold.</type>
+/// <param name="raw_data"> Pointer to raw ADC data for all channels. </param>
+//---------------------------------------------------------------------
+static __attribute__((optimize("O2"))) void Filter3(uint32_t* raw_data)
+{
+    static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
+    static int   signal_below_threshold[N_CHANNELS] = {1};
+
+    for (int i = 0; i < N_CHANNELS; i++) {
+        y0[i] = (float)raw_data[i];
+        // LPF
+        y1[i] = g_lpf1_K * y0[i] + ((float)1.0 - g_lpf1_K) * y1[i];
+        // HPF
+        y2[i] = g_hpf_K * y1[i] + ((float)1.0 - g_hpf_K) * y2[i];
+        y3[i] = y1[i] - y2[i];
+        // Feature
+        y3[i] = fabsf(y3[i]); // added benefit: avoiding negative numbers (not to clash with object detection encoding)
+        // LPF
+        y4[i] = g_lpf2_K * y3[i] + ((float)1.0 - g_lpf2_K) * y4[i];
+
+        if (y4[i] >= g_threshold && signal_below_threshold[i]) {
+            signal_below_threshold[i] = 0;
+            ObjectDetected(i);
+        }
+
+        if (y4[i] < g_threshold && signal_below_threshold[i] == 0) {
+            signal_below_threshold[i] = 1;
+        }
+    }
+
+    if (g_verbose_level)
+        AddValues(raw_data, y4);
+}
+
+//---------------------------------------------------------------------
+/// <summary> Filter raw ADC channel data which is then used for object detection. </summary>
+/// <type> Filter4 - modified filter without blind time but instead with positive edge detection when crossing threshold, that cuts off the second part of signal thereby shortening it.</type>
+/// <param name="raw_data"> Pointer to raw ADC data for all channels. </param>
+//---------------------------------------------------------------------
+static __attribute__((optimize("O2"))) void Filter4(uint32_t* raw_data)
+{
+    static float y0[N_CHANNELS], y1[N_CHANNELS], y2[N_CHANNELS], y3[N_CHANNELS], y4[N_CHANNELS];
+    static int   signal_below_threshold[N_CHANNELS] = {1};
+
+    for (int i = 0; i < N_CHANNELS; i++) {
+        y0[i] = (float)raw_data[i];
+        // LPF
+        y1[i] = g_lpf1_K * y0[i] + ((float)1.0 - g_lpf1_K) * y1[i];
+        // HPF
+        y2[i] = g_hpf_K * y1[i] + ((float)1.0 - g_hpf_K) * y2[i];
+        y3[i] = y2[i] - y1[i];
+        // LPF
+        y4[i] = g_lpf2_K * y3[i] + ((float)1.0 - g_lpf2_K) * y4[i];
+
+        if (y4[i] < 0)
+            y4[i] = 0;
+
+        if (y4[i] >= g_threshold && signal_below_threshold[i]) {
+            signal_below_threshold[i] = 0;
+            ObjectDetected(i);
+        }
+
+        if (y4[i] < g_threshold && signal_below_threshold[i] == 0) {
+            signal_below_threshold[i] = 1;
         }
     }
 

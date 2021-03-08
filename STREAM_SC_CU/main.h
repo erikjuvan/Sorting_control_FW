@@ -24,3 +24,4 @@ void     ResetHeaderID();
 void     Train();
 void     Untrain();
 void     SetValve(unsigned int valve_idx, unsigned int state);
+int      ChooseFilterType(int filter_number);

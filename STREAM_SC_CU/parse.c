@@ -431,6 +431,23 @@ static void Function_VALV(char* str, write_func Write)
     Write((uint8_t*)buf, strlen(buf));
 }
 
+static void Function_FLTT(char* str, write_func Write)
+{
+    str            = strtok(NULL, Delims);
+    int filter_num = atoi(str);
+
+    int ret = ChooseFilterType(filter_num);
+
+    // Echo
+    char buf[20];
+    if (!ret) // ok
+        snprintf(buf, sizeof(buf), "FLTT,%u", filter_num);
+    else // filter does not exist
+        snprintf(buf, sizeof(buf), "FLTT,N/A");
+
+    Write((uint8_t*)buf, strlen(buf));
+}
+
 #define COMMAND(NAME)          \
     {                          \
 #NAME, Function_##NAME \
@@ -467,6 +484,7 @@ static struct {
     COMMAND(SYNS), // Sync Ouptut set, on/off (1/0)
 
     COMMAND(VALV), // Valve control
+    COMMAND(FLTT), // Choose filter type
 };
 
 //---------------------------------------------------------------------
