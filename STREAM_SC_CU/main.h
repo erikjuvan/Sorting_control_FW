@@ -1,8 +1,7 @@
 #pragma once
 
-#define SWVER "SC_CU_FW V1.3.0.1"
-#define HWVER "N/A"
-#define COMPATIBILITYMODE "N/A"
+#define PROJECT_TITLE "STREAM_SC_CU_FW"
+#define VERSION "v1.0.0.0"
 
 #define N_CHANNELS 8
 

@@ -84,7 +84,7 @@ static void Function_CONF(char* str, write_func Write)
 static void Function_VERG(char* str, write_func Write)
 {
     char buf[100] = {0};
-    snprintf(buf, sizeof(buf), "VERG,%s,%s,%s", SWVER, HWVER, COMPATIBILITYMODE);
+    snprintf(buf, sizeof(buf), "VERG,%s,%s", PROJECT_TITLE, VERSION);
     Write((uint8_t*)buf, strlen(buf));
 }
 
